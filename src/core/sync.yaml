@@ -1,0 +1,13 @@
+providers:
+  youtrack:
+    enabled: true
+    url: "http://localhost:20263"
+    token_env: "YOUTRACK_TOKEN"
+  github:
+    enabled: true
+    api_url: "https://api.github.com"
+    token_env: "GITHUB_TOKEN"
+  gitee:
+    enabled: true
+    api_url: "https://gitee.com/api/v5"
+    token_env: "GITEE_TOKEN"

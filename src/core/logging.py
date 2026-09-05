@@ -3,6 +3,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+
 def get_logger(cli_args: str | None = None) -> logging.Logger:
     logger = logging.getLogger("md-sync")
     if logger.handlers:

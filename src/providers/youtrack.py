@@ -1,121 +1,247 @@
-import json
-from urllib.request import Request, urlopen
-from urllib.error import HTTPError
-from src.core.document import MarkdownDocument
-from src.core.logging import get_logger
-from .base import RemoteProvider
+"""YouTrack clients and single-object-type providers."""
 
-class YouTrackProvider(RemoteProvider):
-    """YouTrack Issue and Article adapter with UTF-8 JSON payloads."""
-    name = "youtrack"
+import json
+from urllib.error import HTTPError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
+
+from src.core.logging import get_logger
+from src.core.remote import RemoteContent, RemoteItem, RemotePath
+from src.providers.base import RemoteProvider
+
+
+class YouTrackClient:
     def __init__(self, config: dict):
-        self.url, self.token = config["url"].rstrip("/"), config.get("token", "")
+        self.url = config["url"].rstrip("/")
+        self.token = config.get("token", "")
         self.logger = get_logger()
 
-    def _get(self, path):
-        self.logger.info("api_request provider=youtrack method=GET path=%s", path)
-        req = Request(self.url + path, headers={"Authorization": f"Bearer {self.token}", "Accept": "application/json"})
+    @property
+    def headers(self):
+        return {
+            "Authorization": f"Bearer {self.token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json; charset=utf-8",
+        }
+
+    def get(self, path: str):
+        return self.request("GET", path)
+
+    def post(self, path: str, payload):
+        return self.request("POST", path, payload)
+
+    def request(self, method: str, path: str, payload=None):
+        self.logger.info(
+            "api_request provider=youtrack method=%s path=%s", method, path
+        )
+        data = (
+            json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            if payload is not None
+            else None
+        )
+        request = Request(
+            self.url + path, data=data, headers=self.headers, method=method
+        )
         try:
-            with urlopen(req, timeout=30) as response:
-                self.logger.info("api_response provider=youtrack method=GET path=%s status=%s", path, response.status)
-                return json.loads(response.read().decode("utf-8"))
+            with urlopen(request, timeout=30) as response:
+                raw = response.read().decode("utf-8")
+                return json.loads(raw) if raw else {}
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")[:500]
-            self.logger.error("api_error provider=youtrack method=GET path=%s status=%s detail=%s", path, exc.code, detail)
-            raise RuntimeError(f"YouTrack API {exc.code} for GET {path}: {detail}") from exc
-        except Exception as exc:
-            self.logger.exception("api_error provider=youtrack method=GET path=%s error=%s", path, exc)
-            raise
+            raise RuntimeError(
+                f"YouTrack API {exc.code} for {method} {path}: {detail}"
+            ) from exc
 
-    def fetch(self, document: MarkdownDocument) -> tuple[dict, str]:
-        key = document.sync.primary or next(iter(document.platform_ids), None)
-        if key == "youtrack_article":
-            remote_id = document.platform_ids[key]
-            data = self._get(f"/api/articles/{remote_id}?fields=id,idReadable,summary,content,created,updated,project(name,shortName),parentArticle(id,idReadable,summary),childArticles(id,idReadable,summary)")
-            return data, data.get("content", "")
-        if key == "youtrack_issue":
-            remote_id = document.platform_ids[key]
-            data = self._get(f"/api/issues/{remote_id}?fields=idReadable,summary,description,created,updated,project(name,shortName),reporter(login,fullName),updater(login,fullName),attachments(name),tags(name),customFields(name,value(name,login,fullName,presentation)),links(direction,linkType(name,sourceToTarget,targetToSource),issues(idReadable))")
-            return data, data.get("description", "")
-        raise ValueError("没有可用的 YouTrack Issue/Article ID")
 
-    def _update(self, endpoint, remote_id, payload):
-        request = Request(self.url + f"/api/{endpoint}/{remote_id}", data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), headers={"Authorization": f"Bearer {self.token}", "Accept": "application/json", "Content-Type": "application/json; charset=utf-8"}, method="POST")
-        with urlopen(request, timeout=30) as response:
-            response.read()
+class YouTrackIssueProvider(RemoteProvider):
+    source = "youtrack"
+    resource_type = "issues"
+    supports_parent = True
 
-    def update(self, document: MarkdownDocument, body: str, joint: bool = False) -> None:
-        # Verify the remote title and body after every update so silent API
-        # failures cannot be reported as a successful synchronization.
-        for key, field in (("youtrack_issue", "description"), ("youtrack_article", "content")):
-            remote_id = document.platform_ids.get(key)
-            if not remote_id:
-                continue
-            platform = document.metadata.get("platform", {}).get(key, {})
-            title = platform.get("title") or document.metadata.get("title") or document.metadata.get("summary") or document.path.stem
-            endpoint = "issues" if key == "youtrack_issue" else "articles"
-            payload = {field: body, "summary": title}
-            self.logger.info("sync_payload target=%s fields=%s joint=%s", remote_id, list(payload), joint)
-            if not joint:
-                self.logger.info("sync_skip target=%s fields=project,customFields,relations reason=default_safe_mode", remote_id)
-            self._update(endpoint, remote_id, payload)
-            verify_fields = "idReadable,summary,description" if key == "youtrack_issue" else "id,summary,content"
-            verified = self._get(f"/api/{endpoint}/{remote_id}?fields={verify_fields}")
-            remote_body = verified.get(field, "")
-            if verified.get("summary") != title or remote_body != body:
-                raise RuntimeError(f"{key} 更新后回读不一致")
+    def __init__(self, client: YouTrackClient):
+        self.client = client
 
-    def create(self, document: MarkdownDocument, object_type: str, project: str):
-        platform_data = document.metadata.get("platform", {}).get(f"youtrack_{object_type}", {})
-        titles = [data.get("title") for data in document.metadata.get("platform", {}).values() if isinstance(data, dict)]
-        title = platform_data.get("title") or document.metadata.get("title") or next((x for x in titles if x), None) or document.path.stem
-        endpoint = "issues" if object_type == "issue" else "articles"
-        field = "description" if object_type == "issue" else "content"
-        payload = {"summary": title, field: document.body, "project": {"shortName": project}}
-        if object_type == "issue":
-            custom_fields = []
-            definitions = {
-                "priority": ("Priority", "SingleEnumIssueCustomField", "name"),
-                "type": ("Type", "SingleEnumIssueCustomField", "name"),
-                "status": ("State", "StateIssueCustomField", "name"),
-                "assignee": ("Assignee", "SingleUserIssueCustomField", "login"),
-                "subsystem": ("Subsystem", "SingleOwnedIssueCustomField", "name"),
-                "fix_versions": ("Fix versions", "MultiVersionIssueCustomField", "name"),
-                "affected_versions": ("Affected versions", "MultiVersionIssueCustomField", "name"),
-                "fix_in_build": ("Fixed in build", "SingleBuildIssueCustomField", "name"),
-            }
-            for key, (name, field_type, value_key) in definitions.items():
-                value = platform_data.get(key)
-                if value in (None, "", [], "?"): continue
-                values = value if isinstance(value, list) else [value]
-                if field_type.startswith("Multi"):
-                    custom_fields.append({"name": name, "$type": field_type, "value": [{value_key: item} for item in values]})
-                else:
-                    custom_fields.append({"name": name, "$type": field_type, "value": {value_key: values[0]}})
-            if custom_fields: payload["customFields"] = custom_fields
-        return self._update_create(endpoint, payload)
+    @staticmethod
+    def _readable_id(remote: RemotePath) -> str:
+        return f"{remote.scope[0]}-{remote.object_id}"
 
-    def set_parent_article(self, child_id: str, parent_id: str) -> None:
-        parent = self._get(f"/api/articles/{parent_id}?fields=id")
-        child = self._get(f"/api/articles/{child_id}?fields=id")
-        self._update("articles", parent["id"] + "/childArticles", {"id": child["id"], "$type": "Article"})
+    @staticmethod
+    def _numeric_id(collection: RemotePath, readable_id: str) -> str:
+        prefix = f"{collection.scope[0]}-"
+        if not isinstance(readable_id, str) or not readable_id.casefold().startswith(
+            prefix.casefold()
+        ):
+            raise RuntimeError(
+                f"unexpected YouTrack ID for {collection}: {readable_id!r}"
+            )
+        number = readable_id[len(prefix) :]
+        if not number.isascii() or not number.isdigit():
+            raise RuntimeError(
+                f"unexpected YouTrack ID for {collection}: {readable_id!r}"
+            )
+        return number
 
-    def link_issue(self, issue_id: str, relation: str, target_id: str) -> None:
-        issue = self._get(f"/api/issues/{issue_id}?fields=id")
-        target = self._get(f"/api/issues/{target_id}?fields=id")
-        types = self._get("/api/issueLinkTypes?fields=id,name,sourceToTarget,targetToSource")
-        wanted = "Subtask" if relation == "parent_issue" else "Depend"
-        link_type = next((item for item in types if item.get("name") == wanted), None)
+    def list(self, collection: RemotePath) -> list[RemoteItem]:
+        self.validate(collection, require="collection")
+        query = urlencode({"fields": "idReadable,summary", "$top": 100})
+        data = self.client.get(
+            f"/api/admin/projects/{collection.scope[0]}/issues?{query}"
+        )
+        return [
+            RemoteItem(
+                self._numeric_id(collection, item.get("idReadable")),
+                item.get("summary") or "",
+            )
+            for item in data
+        ]
+
+    def pull(self, remote: RemotePath) -> RemoteContent:
+        self.validate(remote, require="object")
+        issue_id = self._readable_id(remote)
+        data = self.client.get(
+            f"/api/issues/{issue_id}?fields=idReadable,summary,description"
+        )
+        return RemoteContent(data.get("summary") or "", data.get("description") or "")
+
+    def push(self, remote: RemotePath, content: RemoteContent) -> None:
+        self.validate(remote, require="object")
+        issue_id = self._readable_id(remote)
+        payload = {"summary": content.title, "description": content.body}
+        self.client.post(f"/api/issues/{issue_id}", payload)
+        verified = self.client.get(
+            f"/api/issues/{issue_id}?fields=idReadable,summary,description"
+        )
+        if (
+            verified.get("summary") != content.title
+            or (verified.get("description") or "") != content.body
+        ):
+            raise RuntimeError("YouTrack Issue update verification failed")
+
+    def upload(
+        self, collection, content, *, parent=None, base=None, head=None
+    ) -> RemotePath:
+        self.validate(collection, require="collection")
+        if base or head:
+            raise ValueError("--base and --head are not valid for YouTrack upload")
+        if parent:
+            self.validate_parent(collection, parent)
+        payload = {
+            "summary": content.title,
+            "description": content.body,
+            "project": {"shortName": collection.scope[0]},
+        }
+        data = self.client.post("/api/issues?fields=idReadable,id", payload)
+        return collection.with_id(self._numeric_id(collection, data.get("idReadable")))
+
+    def set_parent(self, remote: RemotePath, parent: RemotePath) -> None:
+        collection = RemotePath(remote.source, remote.resource_type, remote.scope)
+        self.validate_parent(collection, parent)
+        issue = self.client.get(f"/api/issues/{self._readable_id(remote)}?fields=id")
+        parent_issue = self.client.get(
+            f"/api/issues/{self._readable_id(parent)}?fields=id"
+        )
+        link_types = self.client.get("/api/issueLinkTypes?fields=id,name")
+        link_type = next(
+            (item for item in link_types if item.get("name") == "Subtask"), None
+        )
         if not link_type:
-            raise RuntimeError(f"YouTrack link type not found: {wanted}")
-        direction = "t" if relation in ("depends_on", "parent_issue") else "s"
-        self._update(
-            "issues",
-            issue["id"] + "/links/" + link_type["id"] + direction + "/issues",
-            {"id": target["id"]},
+            raise RuntimeError("YouTrack link type not found: Subtask")
+        self.client.post(
+            f"/api/issues/{issue['id']}/links/{link_type['id']}t/issues",
+            {"id": parent_issue["id"]},
         )
 
-    def _update_create(self, endpoint, payload):
-        request = Request(self.url + f"/api/{endpoint}?fields=idReadable,id,summary", data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), headers={"Authorization": f"Bearer {self.token}", "Accept": "application/json", "Content-Type": "application/json; charset=utf-8"}, method="POST")
-        with urlopen(request, timeout=30) as response:
-            return json.loads(response.read().decode("utf-8"))
+
+class YouTrackArticleProvider(RemoteProvider):
+    source = "youtrack"
+    resource_type = "articles"
+    supports_parent = True
+
+    def __init__(self, client: YouTrackClient):
+        self.client = client
+
+    @staticmethod
+    def _readable_id(remote: RemotePath) -> str:
+        return f"{remote.scope[0]}-A-{remote.object_id}"
+
+    @staticmethod
+    def _numeric_id(collection: RemotePath, readable_id: str) -> str:
+        prefix = f"{collection.scope[0]}-A-"
+        if not isinstance(readable_id, str) or not readable_id.casefold().startswith(
+            prefix.casefold()
+        ):
+            raise RuntimeError(
+                f"unexpected YouTrack ID for {collection}: {readable_id!r}"
+            )
+        number = readable_id[len(prefix) :]
+        if not number.isascii() or not number.isdigit():
+            raise RuntimeError(
+                f"unexpected YouTrack ID for {collection}: {readable_id!r}"
+            )
+        return number
+
+    def list(self, collection: RemotePath) -> list[RemoteItem]:
+        self.validate(collection, require="collection")
+        query = urlencode({"fields": "id,idReadable,summary", "$top": 100})
+        data = self.client.get(
+            f"/api/admin/projects/{collection.scope[0]}/articles?{query}"
+        )
+        return [
+            RemoteItem(
+                self._numeric_id(collection, item.get("idReadable")),
+                item.get("summary") or "",
+            )
+            for item in data
+        ]
+
+    def pull(self, remote: RemotePath) -> RemoteContent:
+        self.validate(remote, require="object")
+        article_id = self._readable_id(remote)
+        data = self.client.get(
+            f"/api/articles/{article_id}?fields=id,idReadable,summary,content"
+        )
+        return RemoteContent(data.get("summary") or "", data.get("content") or "")
+
+    def push(self, remote: RemotePath, content: RemoteContent) -> None:
+        self.validate(remote, require="object")
+        article_id = self._readable_id(remote)
+        payload = {"summary": content.title, "content": content.body}
+        self.client.post(f"/api/articles/{article_id}", payload)
+        verified = self.client.get(
+            f"/api/articles/{article_id}?fields=id,summary,content"
+        )
+        if (
+            verified.get("summary") != content.title
+            or (verified.get("content") or "") != content.body
+        ):
+            raise RuntimeError("YouTrack Article update verification failed")
+
+    def upload(
+        self, collection, content, *, parent=None, base=None, head=None
+    ) -> RemotePath:
+        self.validate(collection, require="collection")
+        if base or head:
+            raise ValueError("--base and --head are not valid for YouTrack upload")
+        if parent:
+            self.validate_parent(collection, parent)
+        payload = {
+            "summary": content.title,
+            "content": content.body,
+            "project": {"shortName": collection.scope[0]},
+        }
+        data = self.client.post("/api/articles?fields=idReadable,id", payload)
+        return collection.with_id(self._numeric_id(collection, data.get("idReadable")))
+
+    def set_parent(self, remote: RemotePath, parent: RemotePath) -> None:
+        collection = RemotePath(remote.source, remote.resource_type, remote.scope)
+        self.validate_parent(collection, parent)
+        parent_article = self.client.get(
+            f"/api/articles/{self._readable_id(parent)}?fields=id"
+        )
+        child_article = self.client.get(
+            f"/api/articles/{self._readable_id(remote)}?fields=id"
+        )
+        self.client.post(
+            f"/api/articles/{parent_article['id']}/childArticles",
+            {"id": child_article["id"], "$type": "Article"},
+        )
