@@ -1,166 +1,99 @@
-# Markdown Multi-Remote Sync
+# md-sync-manager
 
-> 当前实现说明（UTF-8）
+A small Markdown transport for GitHub, Gitee, and YouTrack. Each Markdown file binds to exactly one remote object. The tool moves only `title` and Markdown body; `parent` is used only when creating an object.
 
-## 当前入口
-
-所有操作统一从 `src.controller.main` 进入：
+## Install
 
 ```powershell
-cd scripts/md-sync
-$env:PYTHONPATH='.'
-python -m src.controller.main status
-python -m src.controller.main download local.md --remote youtrack_issue:DEMO-1
-python -m src.controller.main upload local.md --target youtrack/issue/DEMO
-python -m src.controller.main sync-to-remote local.md
-python -m src.controller.main sync-to-remote local.md --joint
-python -m src.controller.main sync-from-remote local.md
+python -m pip install -r requirements.txt
 ```
 
-支持的远端 ID：`github_issue`、`github_pull_request`、`youtrack_issue`、`youtrack_article`。
+## Resource paths
 
-## 同步模式
+| Object | Collection path | Object path |
+|---|---|---|
+| GitHub Issue | `github/issues/owner/repo` | `github/issues/owner/repo/12` |
+| GitHub Pull Request | `github/pulls/owner/repo` | `github/pulls/owner/repo/12` |
+| Gitee Issue | `gitee/issues/owner/repo` | `gitee/issues/owner/repo/IKDETB` |
+| Gitee Pull Request | `gitee/pulls/owner/repo` | `gitee/pulls/owner/repo/12` |
+| YouTrack Issue | `youtrack/issues/project` | `youtrack/issues/project/12` |
+| YouTrack Article | `youtrack/articles/project` | `youtrack/articles/project/12` |
 
-- `download`：从远端创建本地 Markdown 备份。
-- `upload`：在指定项目中创建新的远端对象，并把新 ID 写回本地 YAML。
-- `sync-from-remote`：根据本地 ID 从远端覆盖更新本地文件。
-- `sync-to-remote`：根据本地 ID 更新已有远端对象。
+YouTrack paths store only the numeric part of a readable ID. For example, `DEMO-39` becomes `youtrack/issues/DEMO/39`, and `DEMO-A-22` becomes `youtrack/articles/DEMO/22`. Project name matching is case-insensitive.
 
-默认 `sync-to-remote` 是安全模式，只同步标题和 Markdown 正文，跳过项目、状态、优先级、指派人、标签、版本及关系等管理字段。
+A collection path is accepted by `list` and `upload`. An object path is accepted by `pull` and stored as `remote` for `push`.
 
-只有显式增加 `--joint` 才进入扩展字段同步流程。发送字段和跳过字段都会写入独立日志。
+## Commands
 
-同步要求本地文件具有 YAML Front Matter、`doc_type: markdown`，并至少有一个平台 ID。远端不存在或正文为空时拒绝写入本地文件。
+```powershell
+# Show the first 100 IDs and titles in a collection.
+python -m src.controller.main list github/issues/owner/repo
 
-## 配置与日志
+# Create or replace a local file from an explicit remote object.
+python -m src.controller.main pull C:\docs\local.md --from youtrack/issues/DEMO/39
 
-当前支持的远端 ID 包括：`github_issue`、`github_pull_request`、`gitee_issue`、`gitee_pull_request`、`youtrack_issue`、`youtrack_article`。
+# Refresh an existing local file from its YAML remote.
+python -m src.controller.main pull C:\docs\local.md
 
-Gitee 使用 API v5，创建目标格式为 `gitee/issue/owner/repo` 或 `gitee/pull-request/owner/repo`。Token 通过 `config/sync.yaml` 的 `providers.gitee.token` 或 `GITEE_TOKEN` 提供。
+# Update the bound remote. This command never creates an object.
+python -m src.controller.main push C:\docs\local.md
 
-平台地址和 Token 配置在本地 `config/sync.yaml`。该文件不得提交到 Git。
+# Explicitly create and bind one new object. The file must not have remote.
+python -m src.controller.main upload C:\docs\local.md --target youtrack/issues/DEMO
+python -m src.controller.main upload C:\docs\local.md --target youtrack/issues/DEMO --parent youtrack/issues/DEMO/10
 
-每次 CLI 执行生成独立日志：
-
-```text
-logs/md-sync.yyyymmdd.hhmmss.msms.log
+# Pull Request creation requires the remote branches.
+python -m src.controller.main upload C:\docs\local.md --target github/pulls/owner/repo --base main --head feature/docs
 ```
 
-日志首行包含完整的 `CLI ARGS`，并记录主平台选择、API 请求、响应状态、发送字段、跳过字段、本地写入和错误详情。日志目录也不得提交到 Git。
+`list` prints a two-column `ID` / `TITLE` table. YouTrack rows also use numeric IDs, so the output can be appended directly to the corresponding collection path.
 
-## 回归测试
-
-完整测试清单见 [docs/regression-test-plan.md](docs/regression-test-plan.md)。
-
-本目录定义以 Markdown 为交换格式的多端文档同步协议。架构文档以远端 GitHub 为主源，本地 Markdown 仅作为工作副本或备份。
-
-## 基本文档格式
+## Markdown contract
 
 ```yaml
 ---
-doc_type: markdown
-
-id:
-  general: "req-2026-001"
-  github_issue: ""
-  github_pull_request: ""
-  youtrack_issue: "DEMO-25"
-  youtrack_article: "183-1"
-
-relations:
-  blocks:
-    youtrack_issue:
-      - DEMO-19
-
-platform:
-  youtrack_issue:
-    title: "需求标题"
-    project: DEMO
-    priority: P0
-
-sync:
-  primary: youtrack_issue
-  order:
-    - youtrack_issue
-    - youtrack_article
-    - github_issue
-    - github_pull_request
-
-project: "finance-system"
-priority: "P0"
-type: "feature"
-assignee: ""
-status: "in_progress"
-parent_issue: "req-2026-000"
-related:
-  - "req-2026-001-analysis"
-  - "req-2026-001-test"
+title: "Document title"
+parent: "youtrack/issues/DEMO/10" # optional, upload only
+remote: "youtrack/issues/DEMO/39" # optional, exactly one object
 ---
 
-# 文档标题
-
-正文使用标准 Markdown。
+Markdown body.
 ```
 
-不存在的平台对象不写对应字段。例如没有 GitHub Issue，就不写 `github_issue`，不使用空字段占位。
+Only `title`, `parent`, and `remote` are accepted in Front Matter. `--parent` overrides the YAML parent and writes the canonical path back to the file. A parent must use the same route and repository/project as the upload target. Pull Requests do not support parents.
 
-## ID 与关系
+## Safety
 
-- 当前不要求 `general_id`；平台尚未建立统一基准时，直接使用平台 ID。
-- 平台 ID 用于定位对应的远端对象。
-- 关系按 `relations.<关系>.<平台>` 保存，例如 `relations.blocks.youtrack_issue`。
-- 同步器根据 `general`、平台 ID 和配置中的地址查找对象。
-- `sync.primary` 是远端主端，`sync.order` 是远端读取优先级。
+- `pull` reads one remote and overwrites the local title/body. It never writes remote state.
+- `push` requires `remote` and updates only title/body. It never creates anything and ignores `parent`.
+- `upload` requires no `remote` and an explicit collection `--target`. It creates one object and then saves its object path.
+- Status, labels, assignee, priority, relations, and other project-management fields are outside this tool's contract.
 
-## 同步方向
+## Configuration
 
-```text
-sync-to-remote：本地正文 → 主端 → 副端
-sync-to-local：主端 → 备用端 → 本地备份
-```
-
-主端失败时整体失败，副端失败时返回 `PARTIAL_SUCCESS`，不能静默报告成功。
+Provider endpoints and token sources live in `src/core/sync.yaml`. A provider is registered when `enabled` is true and its token resolves to a non-empty value.
 
 ```powershell
-python -m src.controller.main download --remote youtrack_article:DEMO-A-3 documents/example.md
-python -m src.controller.main upload documents/example.md
-python -m src.controller.main sync-from-remote documents/example.md
-python -m src.controller.main sync-to-remote documents/example.md
+$env:GITHUB_TOKEN = "..."
+$env:GITEE_TOKEN = "..."
+$env:YOUTRACK_TOKEN = "..."
 ```
 
-新建远端对象时必须显式指定目标，使用三级路径：
+An explicit `token` in `sync.yaml` takes precedence over `token_env`. Do not commit real credentials. The checked-in YouTrack endpoint uses `http://localhost:20263` for the local development service.
+
+## Tests
 
 ```powershell
-python -m src.controller.main upload documents/example.md --target youtrack/issue/DEMO
-python -m src.controller.main upload documents/example.md --target youtrack/article/DEMO
+python -m unittest discover -s tests -v
 ```
 
-格式为 `<平台>/<对象类型>/<项目>`。`upload` 不更新已有对象；已有对象使用 `sync-to-remote`。
+## Update from GitHub
 
-## 同步原则
+The Skill package can check for or apply a fast-forward update from its configured GitHub `origin`:
 
-```text
-读取 general ID → 读取远端配置 → 按平台 ID 查找 → 下载/更新远端内容 → 保存本地备份
+```powershell
+python scripts/update_from_github.py --check
+python scripts/update_from_github.py
 ```
 
-默认采用 `remote_authoritative`：远端是事实来源，本地文件不能无条件覆盖远端；找不到远端对象时默认不自动创建。
-
-## 当前格式
-
-当前唯一支持的格式是纯文本 Markdown，YAML Front Matter 中使用：
-
-```yaml
-doc_type: markdown
-```
-
-暂不定义 `requirement`、`analysis`、`schema` 等专用类型。未来增加专用格式时，再单独扩展解析规则。
-
-## 实现边界
-
-- `src/doc/`：Front Matter 和 Markdown 解析
-- `src/providers/`：YouTrack、GitHub 等平台适配器
-- `src/controller/`：同步中控、ID 解析和关联处理
-- `src/config/`：配置文件加载代码
-- `config/`：实际平台地址、认证变量和同步策略；不固定绑定 YouTrack 项目
-- `documents/`：本地备份文件目录
-- `backups/`：下载前的历史备份目录
+The updater refuses dirty worktrees, non-GitHub remotes, and divergent history. It never commits, stashes, resets, or discards local work.
