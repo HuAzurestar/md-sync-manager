@@ -68,7 +68,10 @@ class SyncController:
             raise ValueError(f"remote object has no title; refusing to write {file}")
 
         existing_parent = document.parent
+        existing_type = document.document_type
         document.metadata = {"title": content.title}
+        if existing_type:
+            document.metadata["type"] = existing_type
         if existing_parent:
             document.metadata["parent"] = existing_parent
         document.remote = remote

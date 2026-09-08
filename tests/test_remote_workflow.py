@@ -62,9 +62,17 @@ def controller_with(provider):
 
 
 def write_document(
-    path, *, title="Local title", body="Local body\n", remote=None, parent=None
+    path,
+    *,
+    title="Local title",
+    body="Local body\n",
+    remote=None,
+    parent=None,
+    document_type=None,
 ):
     metadata = {"title": title}
+    if document_type:
+        metadata["type"] = document_type
     if parent:
         metadata["parent"] = parent
     document = parse_text("---\ntitle: placeholder\n---\n\n" + body, path)
@@ -157,6 +165,20 @@ class ControllerTests(unittest.TestCase):
             self.assertEqual(document.title, "Remote title")
             self.assertEqual(document.body, "Remote body\n")
             self.assertEqual(str(document.remote), "github/issues/o/r/3")
+
+    def test_pull_preserves_standard_document_type(self):
+        provider = FakeProvider()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "doc.md"
+            write_document(
+                path,
+                remote="github/issues/o/r/3",
+                document_type="pirc.requirement",
+            )
+
+            controller_with(provider).pull(path)
+
+            self.assertEqual(parse_file(path).document_type, "pirc.requirement")
 
     def test_push_only_updates_and_requires_remote(self):
         provider = FakeProvider()

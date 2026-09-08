@@ -48,11 +48,22 @@ python -m src.controller.main upload C:\docs\local.md --target github/pulls/owne
 
 `list` prints a two-column `ID` / `TITLE` table. YouTrack rows also use numeric IDs, so the output can be appended directly to the corresponding collection path.
 
+## PIRC document guard
+
+Generate a requirement skeleton, generate its uniquely paired solution, or check the pair without changing either source document:
+
+```powershell
+python -m src.controller.doc_guard init requirement "PIRC-99 Example 需求分析.md"
+python -m src.controller.doc_guard init solution "PIRC-99 Example 方案设计.md" --requirement "PIRC-99 Example 需求分析.md"
+python -m src.controller.doc_guard check "PIRC-99 Example 需求分析.md"
+```
+
 ## Markdown contract
 
 ```yaml
 ---
 title: "Document title"
+type: "pirc.requirement" # optional; required for a standard PIRC document
 parent: "youtrack/issues/DEMO/10" # optional, upload only
 remote: "youtrack/issues/DEMO/39" # optional, exactly one object
 ---
@@ -60,7 +71,7 @@ remote: "youtrack/issues/DEMO/39" # optional, exactly one object
 Markdown body.
 ```
 
-Only `title`, `parent`, and `remote` are accepted in Front Matter. `--parent` overrides the YAML parent and writes the canonical path back to the file. A parent must use the same route and repository/project as the upload target. Pull Requests do not support parents.
+Only `title`, `type`, `parent`, and `remote` are accepted in Front Matter. `type` may be omitted for an ordinary Markdown document; a standard PIRC document uses `pirc.requirement` or `pirc.solution`. `--parent` overrides the YAML parent and writes the canonical path back to the file. A parent must use the same route and repository/project as the upload target. Pull Requests do not support parents.
 
 ## Safety
 
