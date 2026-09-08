@@ -16,6 +16,14 @@ class _UniqueKeyLoader(yaml.SafeLoader):
     """Safe YAML loader that rejects ambiguous duplicate mapping keys."""
 
 
+class MetadataError(ValueError):
+    """A metadata validation error with an optional YAML source location."""
+
+    def __init__(self, message, problem_mark=None):
+        super().__init__(message)
+        self.problem_mark = problem_mark
+
+
 def _construct_unique_mapping(loader, node, deep=False):
     mapping = {}
     for key_node, value_node in node.value:
@@ -29,7 +37,7 @@ def _construct_unique_mapping(loader, node, deep=False):
                 key_node.start_mark,
             )
         if key in mapping:
-            raise ValueError(f"duplicate metadata field: {key}")
+            raise MetadataError(f"duplicate metadata field: {key}", key_node.start_mark)
         mapping[key] = loader.construct_object(value_node, deep=deep)
     return mapping
 

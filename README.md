@@ -50,13 +50,27 @@ python -m src.controller.main upload C:\docs\local.md --target github/pulls/owne
 
 ## PIRC document guard
 
-Generate a requirement skeleton, generate its uniquely paired solution, or check the pair without changing either source document:
+Generate a requirement skeleton, validate a uniquely paired requirement and solution,
+extract bounded review context, or merge external review results without changing the
+source documents:
 
 ```powershell
 python -m src.controller.doc_guard init requirement "PIRC-99 Example 需求分析.md"
 python -m src.controller.doc_guard init solution "PIRC-99 Example 方案设计.md" --requirement "PIRC-99 Example 需求分析.md"
 python -m src.controller.doc_guard check "PIRC-99 Example 需求分析.md"
+python -m src.controller.doc_guard check --requirement "PIRC-99 Example 需求分析.md" --solution "PIRC-99 Example 方案设计.md" --format json
+python -m src.controller.doc_guard context --requirement "PIRC-99 Example 需求分析.md" --solution "PIRC-99 Example 方案设计.md" --requirement-id REQ-001 --format json
+python -m src.controller.doc_guard catalog "PIRC-99 Example 需求分析.md" --format json
+python -m src.controller.doc_guard extract "PIRC-99 Example 需求分析.md" --id REQ-001 --profile audit --format json
+python -m src.controller.doc_guard review "PIRC-99 Example 需求分析.md" --scope REQ-001 --profile audit --format json
 ```
+
+`check` returns `0` for AUTO PASS, `1` for AUTO BLOCKED, and `2` for an
+argument, I/O, encoding, creation, or external-result contract error. `catalog`
+and `extract` also accept ordinary Markdown without a `type`; strict checking and
+`review` require a standard `pirc.requirement`/`pirc.solution` pair. Generated
+documents are validated in a same-directory temporary file and atomically
+published without overwriting an existing target.
 
 ## Markdown contract
 
