@@ -42,6 +42,15 @@ class SyncService:
         collection = RemotePath.parse(target, require="collection")
         return self._provider(collection).list(collection)
 
+    def download(self, source: str) -> tuple[RemotePath, RemoteContent]:
+        remote = RemotePath.parse(source, require="object")
+        content = self._provider(remote).pull(remote)
+        if not content.body or not content.body.strip():
+            raise ValueError(f"remote object has no Markdown content: {remote}")
+        if not content.title.strip():
+            raise ValueError(f"remote object has no title: {remote}")
+        return remote, content
+
     def pull(self, file: Path, source: str | None = None):
         self._require_markdown_path(file)
         if source:
@@ -61,13 +70,7 @@ class SyncService:
                 raise ValueError("pull requires --from or a remote path in YAML")
             remote = document.remote
 
-        content = self._provider(remote).pull(remote)
-        if not content.body or not content.body.strip():
-            raise ValueError(
-                f"remote object has no Markdown content; refusing to write {file}"
-            )
-        if not content.title.strip():
-            raise ValueError(f"remote object has no title; refusing to write {file}")
+        _, content = self.download(str(remote))
 
         existing_parent = document.parent
         document.metadata = {"title": content.title}
