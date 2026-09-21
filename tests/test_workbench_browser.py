@@ -122,6 +122,15 @@ class WorkbenchBrowserTests(unittest.TestCase):
         self.page.locator("#catalogButton").click()
         choices = self.page.locator(".catalog-select")
         choices.nth(1).check()
+        choices.nth(2).check()
+        self.page.locator("#focusReadButton").click()
+        self.page.wait_for_function(
+            "document.querySelector('#focusEditor').value.includes('## Two')"
+        )
+        multi_source = self.page.locator("#focusEditor").input_value()
+        self.assertLess(multi_source.index("## One"), multi_source.index("## Two"))
+
+        choices.nth(2).uncheck()
         self.page.locator("#focusReadButton").click()
         self.page.locator("#focusEditor").fill("## One\nnew\n")
         self.page.locator("#focusApplyButton").click()
@@ -147,6 +156,65 @@ class WorkbenchBrowserTests(unittest.TestCase):
             "document.querySelector('#statusMessage').dataset.error === 'true'"
         )
         self.assertTrue(status.inner_text().strip())
+
+    def test_remote_list_open_pull_push_and_upload_controls(self):
+        def fulfill(route):
+            path = route.request.url.split("?", 1)[0]
+            data = None
+            if path.endswith("/sync/list"):
+                data = {"items": [{"id": "7", "title": "Remote note"}]}
+            elif path.endswith("/sync/open"):
+                data = {"name": "remote.md", "content": "# Remote\noriginal\n"}
+            elif path.endswith("/sync/pull/preview"):
+                data = {"preview_id": "browser-preview", "diff": "remote update"}
+            elif path.endswith("/sync/pull/confirm"):
+                data = {"content": "# Remote\npulled\n"}
+            elif path.endswith("/sync/push"):
+                data = {"result": {"status": "success", "remote": "7"}}
+            elif path.endswith("/sync/upload"):
+                data = {
+                    "name": "remote.md",
+                    "content": "# Remote\nuploaded\n",
+                    "result": {"status": "success", "remote": "8"},
+                }
+            else:
+                route.continue_()
+                return
+            route.fulfill(json={"status": "success", "data": data, "error": None})
+
+        self.page.route("**/api/v1/sync/**", fulfill)
+        self.page.locator('[data-panel="syncPanel"]').click()
+        self.page.locator("#remoteListButton").click()
+        self.page.locator('#remoteObjectSelect option[value="7"]').wait_for(state="attached")
+        self.page.locator("#remoteObjectSelect").select_option("7")
+        self.page.locator("#remoteOpenButton").click()
+        self.page.wait_for_function(
+            "document.querySelector('#currentName').textContent === 'remote.md'"
+        )
+        self.assertEqual(self.page.locator("#editor").input_value(), "# Remote\noriginal\n")
+
+        self.page.locator("#editor").fill("# Remote\nlocal edit\n")
+        self.page.locator("#pullPreviewButton").click()
+        self.page.locator("#pullConfirmButton").wait_for(state="visible")
+        self.page.wait_for_function(
+            "!document.querySelector('#pullConfirmButton').disabled"
+        )
+        self.assertIn("remote update", self.page.locator("#syncOutput").inner_text())
+        self.page.locator("#pullConfirmButton").click()
+        self.page.wait_for_function(
+            "document.querySelector('#editor').value.includes('pulled')"
+        )
+
+        self.page.locator("#editor").fill("# Remote\npush me\n")
+        self.page.locator("#pushButton").click()
+        self.page.wait_for_function(
+            "document.querySelector('#statusMessage').textContent === 'Push complete'"
+        )
+        self.page.locator("#uploadButton").click()
+        self.page.wait_for_function(
+            "document.querySelector('#statusMessage').textContent === 'Upload complete'"
+        )
+        self.assertEqual(self.page.locator("#editor").input_value(), "# Remote\nuploaded\n")
 
 
 if __name__ == "__main__":

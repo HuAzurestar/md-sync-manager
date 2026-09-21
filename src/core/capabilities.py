@@ -12,19 +12,3 @@ P0_CAPABILITIES = (
     "document.focus.apply",
     "workbench.single-file",
 )
-
-
-DEFERRED_CAPABILITIES = frozenset(
-    {
-        "review",
-        "review-view",
-        "review-record",
-        "document.audit",
-        "document.full",
-        "document.template",
-        "document.pair-check",
-    }
-)
-
-
-assert not (set(P0_CAPABILITIES) & DEFERRED_CAPABILITIES)

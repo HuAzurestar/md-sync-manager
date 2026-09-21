@@ -4,7 +4,13 @@ from fastapi.testclient import TestClient
 
 from src.api.app import create_app
 from src.controller.server import DEFAULT_HOST, DEFAULT_PORT
-from src.core.capabilities import DEFERRED_CAPABILITIES, P0_CAPABILITIES
+from src.core.capabilities import P0_CAPABILITIES
+
+
+OUT_OF_SCOPE_CAPABILITIES = {
+    "review", "review-view", "review-record", "document.audit",
+    "document.full", "document.template", "document.pair-check",
+}
 
 
 class AppShellTests(unittest.TestCase):
@@ -17,7 +23,7 @@ class AppShellTests(unittest.TestCase):
         self.assertIsNone(payload["error"])
         self.assertEqual(payload["data"]["state"], "ready")
         self.assertEqual(payload["data"]["capabilities"], list(P0_CAPABILITIES))
-        self.assertFalse(set(payload["data"]["capabilities"]) & DEFERRED_CAPABILITIES)
+        self.assertFalse(set(payload["data"]["capabilities"]) & OUT_OF_SCOPE_CAPABILITIES)
 
     def test_route_snapshot_has_no_review_or_deferred_product_surface(self):
         application = create_app()
