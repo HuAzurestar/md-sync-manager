@@ -1,0 +1,281 @@
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+const state = {
+  name: "untitled.md",
+  content: "# Untitled\n",
+  savedContent: "# Untitled\n",
+  catalog: [],
+  selectedSection: null,
+  pullPreviewId: null,
+  language: "en",
+};
+
+const messages = {
+  en: {
+    title: "Markdown Focus Workbench", openFile: "Open file", download: "Download",
+    focusMode: "Focus mode", documentMode: "Document / Focus", syncMode: "Sync",
+    catalog: "Catalog", refresh: "Refresh", catalogHint: "Select several headings to read, or one heading to modify.",
+    readSelection: "Read selection", focusSource: "Selected source", applySelection: "Apply selected section",
+    remoteSync: "Remote sync", collection: "Collection", listRemote: "List remote", remoteObject: "Remote object",
+    openRemote: "Open", pullPreview: "Preview pull", confirmPull: "Confirm pull", providerConfig: "Provider configuration",
+    enabled: "Enabled", saveProvider: "Save provider", editor: "Editor", preview: "Preview",
+  },
+  zh: {
+    title: "Markdown 聚焦工作台", openFile: "打开文件", download: "下载副本",
+    focusMode: "专注模式", documentMode: "文档 / 聚焦", syncMode: "同步",
+    catalog: "目录", refresh: "刷新", catalogHint: "多选标题进行读取，单选标题进行修改。",
+    readSelection: "读取所选", focusSource: "所选原文", applySelection: "应用所选章节",
+    remoteSync: "远端同步", collection: "集合路径", listRemote: "列出远端", remoteObject: "远端对象",
+    openRemote: "打开", pullPreview: "预览拉取", confirmPull: "确认拉取", providerConfig: "Provider 配置",
+    enabled: "启用", saveProvider: "保存 Provider", editor: "编辑器", preview: "预览",
+  },
+};
+
+async function api(path, payload = null, method = "POST") {
+  const options = { method, headers: {} };
+  if (payload !== null) {
+    options.headers["Content-Type"] = "application/json";
+    options.body = JSON.stringify(payload);
+  }
+  const response = await fetch(path, options);
+  const envelope = await response.json();
+  if (!response.ok || envelope.status !== "success") {
+    throw new Error(envelope.error?.message || `${response.status} ${response.statusText}`);
+  }
+  return envelope.data;
+}
+
+function setStatus(message, error = false) {
+  $("statusMessage").textContent = message;
+  $("statusMessage").dataset.error = String(error);
+}
+
+function updateDirtyState() {
+  const dirty = state.content !== state.savedContent;
+  $("dirtyBadge").dataset.state = dirty ? "dirty" : "clean";
+  $("dirtyBadge").textContent = dirty ? "Unsaved" : "Saved";
+}
+
+function renderContent() {
+  $("editor").value = state.content;
+  $("preview").textContent = state.content;
+  $("currentName").textContent = state.name;
+  updateDirtyState();
+}
+
+function setDocument(name, content, saved = true) {
+  state.name = name || "untitled.md";
+  state.content = content;
+  if (saved) state.savedContent = content;
+  state.catalog = [];
+  state.selectedSection = null;
+  state.pullPreviewId = null;
+  $("catalogList").replaceChildren();
+  $("focusEditor").value = "";
+  $("focusApplyButton").disabled = true;
+  $("pullConfirmButton").disabled = true;
+  renderContent();
+}
+
+function selectedHeadings() {
+  return [...document.querySelectorAll(".catalog-select:checked")].map((item) => item.value);
+}
+
+function renderCatalog(entries) {
+  const container = $("catalogList");
+  container.replaceChildren();
+  entries.forEach((entry, index) => {
+    const label = document.createElement("label");
+    label.className = "catalog-item";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "catalog-select";
+    checkbox.value = entry.heading;
+    checkbox.addEventListener("change", () => {
+      const count = selectedHeadings().length;
+      $("focusReadButton").disabled = count === 0;
+      $("focusApplyButton").disabled = count !== 1 || !state.selectedSection;
+    });
+    const text = document.createElement("span");
+    text.textContent = `${index + 1}. ${entry.heading} · L${entry.line}`;
+    label.append(checkbox, text);
+    container.append(label);
+  });
+}
+
+async function refreshCatalog() {
+  const result = await api("/api/v1/document/catalog", { name: state.name, content: state.content });
+  state.catalog = result.entries;
+  renderCatalog(result.entries);
+  setStatus(`Catalog: ${result.entries.length} headings`);
+}
+
+async function readFocus() {
+  const selectors = selectedHeadings();
+  const result = await api("/api/v1/document/focus/read", { name: state.name, content: state.content, selectors });
+  $("focusEditor").value = result.sections.map((item) => item.source).join("\n");
+  state.selectedSection = result.sections.length === 1 ? result.sections[0] : null;
+  $("focusApplyButton").disabled = !state.selectedSection;
+  setStatus(`Read ${result.sections.length} section(s)`);
+}
+
+async function applyFocus() {
+  const selectors = selectedHeadings();
+  if (selectors.length !== 1 || !state.selectedSection) return;
+  const result = await api("/api/v1/document/focus/apply", {
+    name: state.name,
+    content: state.content,
+    selector: selectors[0],
+    expected_source: state.selectedSection.source,
+    replacement: $("focusEditor").value,
+  });
+  state.content = result.content;
+  state.selectedSection = result.section;
+  renderContent();
+  await refreshCatalog();
+  setStatus("Section applied");
+}
+
+async function openLocalFile(file) {
+  if (!file || !file.name.toLowerCase().endsWith(".md")) throw new Error("Choose a .md file");
+  setDocument(file.name, await file.text(), true);
+  await refreshCatalog();
+}
+
+async function listRemote() {
+  const target = $("collectionInput").value.trim();
+  const result = await api("/api/v1/sync/list", { target });
+  const select = $("remoteObjectSelect");
+  select.replaceChildren(new Option("—", ""));
+  result.items.forEach((item) => select.add(new Option(`${item.id} · ${item.title}`, item.id)));
+  setStatus(`Remote objects: ${result.items.length}`);
+}
+
+async function openRemote() {
+  const result = await api("/api/v1/sync/open", { remote: $("remoteInput").value.trim() });
+  setDocument(result.name, result.content, true);
+  await refreshCatalog();
+}
+
+async function previewPull() {
+  const source = $("remoteInput").value.trim() || null;
+  const result = await api("/api/v1/sync/pull/preview", { name: state.name, content: state.content, source });
+  state.pullPreviewId = result.preview_id;
+  $("pullConfirmButton").disabled = false;
+  $("syncOutput").textContent = result.diff || "No content change";
+  setStatus("Pull preview ready");
+}
+
+async function confirmPull() {
+  const result = await api("/api/v1/sync/pull/confirm", {
+    name: state.name, content: state.content, preview_id: state.pullPreviewId,
+  });
+  setDocument(state.name, result.content, true);
+  await refreshCatalog();
+  setStatus("Pull applied");
+}
+
+async function pushDocument() {
+  const result = await api("/api/v1/sync/push", { name: state.name, content: state.content });
+  state.savedContent = state.content;
+  updateDirtyState();
+  $("syncOutput").textContent = JSON.stringify(result.result, null, 2);
+  setStatus("Push complete");
+}
+
+async function uploadDocument() {
+  const result = await api("/api/v1/sync/upload", {
+    name: state.name, content: state.content, target: $("collectionInput").value.trim(),
+  });
+  setDocument(state.name, result.content, true);
+  $("syncOutput").textContent = JSON.stringify(result.result, null, 2);
+  setStatus(result.result.status === "PARTIAL" ? "Upload partially completed" : "Upload complete");
+}
+
+async function loadProvider() {
+  const config = await api("/api/v1/providers", null, "GET");
+  const provider = config.providers[$("providerSelect").value];
+  $("providerEnabled").checked = provider.enabled;
+  $("providerUrl").value = provider.url;
+  $("providerToken").value = "";
+}
+
+async function saveProvider() {
+  const name = $("providerSelect").value;
+  const values = { enabled: $("providerEnabled").checked, url: $("providerUrl").value.trim() };
+  if ($("providerToken").value) values.token = $("providerToken").value;
+  await api("/api/v1/providers", { providers: { [name]: values } }, "PUT");
+  $("providerToken").value = "";
+  setStatus(`${name} configuration saved`);
+  await loadProvider();
+}
+
+function downloadDocument() {
+  const blob = new Blob([state.content], { type: "text/markdown;charset=utf-8" });
+  const anchor = document.createElement("a");
+  anchor.href = URL.createObjectURL(blob);
+  anchor.download = state.name;
+  anchor.click();
+  URL.revokeObjectURL(anchor.href);
+}
+
+function applyLanguage() {
+  document.documentElement.lang = state.language;
+  document.querySelectorAll("[data-i18n]").forEach((node) => {
+    node.textContent = messages[state.language][node.dataset.i18n] || node.textContent;
+  });
+}
+
+function handleError(action) {
+  return async (...args) => {
+    try { await action(...args); }
+    catch (error) { setStatus(error.message || String(error), true); }
+  };
+}
+
+$("editor").addEventListener("input", () => {
+  state.content = $("editor").value;
+  $("preview").textContent = state.content;
+  state.selectedSection = null;
+  $("focusApplyButton").disabled = true;
+  updateDirtyState();
+});
+$("fileInput").addEventListener("change", handleError((event) => openLocalFile(event.target.files[0])));
+$("catalogButton").addEventListener("click", handleError(refreshCatalog));
+$("focusReadButton").addEventListener("click", handleError(readFocus));
+$("focusApplyButton").addEventListener("click", handleError(applyFocus));
+$("remoteListButton").addEventListener("click", handleError(listRemote));
+$("remoteOpenButton").addEventListener("click", handleError(openRemote));
+$("pullPreviewButton").addEventListener("click", handleError(previewPull));
+$("pullConfirmButton").addEventListener("click", handleError(confirmPull));
+$("pushButton").addEventListener("click", handleError(pushDocument));
+$("uploadButton").addEventListener("click", handleError(uploadDocument));
+$("providerSelect").addEventListener("change", handleError(loadProvider));
+$("providerSaveButton").addEventListener("click", handleError(saveProvider));
+$("downloadButton").addEventListener("click", downloadDocument);
+$("focusModeButton").addEventListener("click", () => {
+  document.body.classList.toggle("focus-mode");
+  $("focusModeButton").setAttribute("aria-pressed", String(document.body.classList.contains("focus-mode")));
+});
+$("languageSelect").addEventListener("change", (event) => { state.language = event.target.value; applyLanguage(); });
+$("remoteObjectSelect").addEventListener("change", (event) => {
+  const id = event.target.value;
+  if (id) $("remoteInput").value = `${$("collectionInput").value.trim()}/${id}`;
+});
+document.querySelectorAll(".mode-button").forEach((button) => button.addEventListener("click", () => {
+  document.querySelectorAll(".mode-button").forEach((item) => item.classList.toggle("active", item === button));
+  document.querySelectorAll(".control-panel").forEach((panel) => panel.classList.toggle("active", panel.id === button.dataset.panel));
+}));
+
+const dropZone = $("dropZone");
+dropZone.addEventListener("dragover", (event) => { event.preventDefault(); dropZone.classList.add("dragging"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragging"));
+dropZone.addEventListener("drop", handleError(async (event) => {
+  event.preventDefault(); dropZone.classList.remove("dragging"); await openLocalFile(event.dataTransfer.files[0]);
+}));
+
+renderContent();
+applyLanguage();
+handleError(refreshCatalog)();
+handleError(loadProvider)();

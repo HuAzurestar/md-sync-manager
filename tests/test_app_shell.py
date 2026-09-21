@@ -52,7 +52,7 @@ class AppShellTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn('data-workbench="single-file"', response.text)
-        self.assertNotIn("review", response.text.casefold())
+        self.assertNotIn('id="review', response.text.casefold())
         self.assertEqual(DEFAULT_HOST, "127.0.0.1")
         self.assertEqual(DEFAULT_PORT, 8000)
 

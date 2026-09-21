@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from src.api.responses import failure, success
 from src.api.sync_routes import router as sync_router
@@ -34,6 +35,7 @@ def create_app(
     service = sync_service or SyncController(store.load())
     application.state.config_store = store
     application.state.workbench_sync = WorkbenchSyncService(service)
+    application.mount("/static", StaticFiles(directory=UI_ROOT), name="static")
 
     @application.exception_handler(Exception)
     async def unhandled_error(_request: Request, exc: Exception) -> JSONResponse:

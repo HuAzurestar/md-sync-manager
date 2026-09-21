@@ -4,11 +4,100 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Markdown Focus Workbench</title>
+    <link rel="stylesheet" href="/static/styles.css">
   </head>
   <body data-workbench="single-file">
-    <main>
-      <h1>Markdown Focus Workbench</h1>
-      <p>The focused single-file workspace is starting.</p>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">PIRC-14</p>
+        <h1 data-i18n="title">Markdown Focus Workbench</h1>
+      </div>
+      <div class="header-actions">
+        <label class="button" for="fileInput" data-i18n="openFile">Open file</label>
+        <input id="fileInput" type="file" accept=".md,text/markdown" hidden>
+        <button id="downloadButton" type="button" data-i18n="download">Download</button>
+        <button id="focusModeButton" type="button" aria-pressed="false" data-i18n="focusMode">Focus mode</button>
+        <select id="languageSelect" aria-label="Language">
+          <option value="en">English</option>
+          <option value="zh">中文</option>
+        </select>
+      </div>
+    </header>
+
+    <nav class="mode-nav" aria-label="Workbench mode">
+      <button class="mode-button active" type="button" data-panel="documentPanel" data-i18n="documentMode">Document / Focus</button>
+      <button class="mode-button" type="button" data-panel="syncPanel" data-i18n="syncMode">Sync</button>
+      <span id="dirtyBadge" class="status-pill" data-state="clean">Saved</span>
+      <span id="currentName" class="current-name">untitled.md</span>
+    </nav>
+
+    <main id="dropZone" class="workspace">
+      <aside class="control-column">
+        <section id="documentPanel" class="control-panel active">
+          <div class="section-heading">
+            <h2 data-i18n="catalog">Catalog</h2>
+            <button id="catalogButton" type="button" data-i18n="refresh">Refresh</button>
+          </div>
+          <p class="hint" data-i18n="catalogHint">Select several headings to read, or one heading to modify.</p>
+          <div id="catalogList" class="catalog-list" aria-live="polite"></div>
+          <button id="focusReadButton" type="button" disabled data-i18n="readSelection">Read selection</button>
+          <label for="focusEditor" data-i18n="focusSource">Selected source</label>
+          <textarea id="focusEditor" rows="10" spellcheck="false"></textarea>
+          <button id="focusApplyButton" type="button" disabled data-i18n="applySelection">Apply selected section</button>
+        </section>
+
+        <section id="syncPanel" class="control-panel">
+          <h2 data-i18n="remoteSync">Remote sync</h2>
+          <label for="collectionInput" data-i18n="collection">Collection</label>
+          <input id="collectionInput" value="github/issues/owner/repo">
+          <button id="remoteListButton" type="button" data-i18n="listRemote">List remote</button>
+          <select id="remoteObjectSelect" aria-label="Remote objects">
+            <option value="">—</option>
+          </select>
+          <label for="remoteInput" data-i18n="remoteObject">Remote object</label>
+          <input id="remoteInput" placeholder="github/issues/owner/repo/1">
+          <div class="button-grid">
+            <button id="remoteOpenButton" type="button" data-i18n="openRemote">Open</button>
+            <button id="pullPreviewButton" type="button" data-i18n="pullPreview">Preview pull</button>
+            <button id="pullConfirmButton" type="button" disabled data-i18n="confirmPull">Confirm pull</button>
+            <button id="pushButton" type="button">Push</button>
+            <button id="uploadButton" type="button">Upload / New</button>
+          </div>
+          <pre id="syncOutput" class="output" aria-live="polite"></pre>
+
+          <details>
+            <summary data-i18n="providerConfig">Provider configuration</summary>
+            <label for="providerSelect">Provider</label>
+            <select id="providerSelect">
+              <option value="github">GitHub</option>
+              <option value="gitee">Gitee</option>
+              <option value="youtrack">YouTrack</option>
+            </select>
+            <label><input id="providerEnabled" type="checkbox"> <span data-i18n="enabled">Enabled</span></label>
+            <label for="providerUrl">URL</label>
+            <input id="providerUrl">
+            <label for="providerToken">Token</label>
+            <input id="providerToken" type="password" autocomplete="new-password">
+            <button id="providerSaveButton" type="button" data-i18n="saveProvider">Save provider</button>
+          </details>
+        </section>
+      </aside>
+
+      <section class="editor-column">
+        <div class="editor-pane">
+          <div class="section-heading"><h2 data-i18n="editor">Editor</h2></div>
+          <textarea id="editor" spellcheck="false" aria-label="Markdown editor"></textarea>
+        </div>
+        <div class="preview-pane">
+          <div class="section-heading"><h2 data-i18n="preview">Preview</h2></div>
+          <pre id="preview" tabindex="0"></pre>
+        </div>
+      </section>
     </main>
+
+    <footer>
+      <span id="statusMessage" role="status" aria-live="polite">Ready</span>
+    </footer>
+    <script src="/static/app.js" defer></script>
   </body>
 </html>
