@@ -20,8 +20,12 @@ const messages = {
     remoteSync: "Remote sync", collection: "Collection", listRemote: "List remote", remoteObject: "Remote object",
     openRemote: "Open", pullPreview: "Preview pull", confirmPull: "Confirm pull", providerConfig: "Provider configuration",
     enabled: "Enabled", saveProvider: "Save provider", editor: "Editor", preview: "Preview",
+    showEditor: "Editor", showPreview: "Preview",
+    discardChanges: "Discard unsaved changes and open another document?",
   },
   zh: {
+    showEditor: "\u7f16\u8f91", showPreview: "\u9884\u89c8",
+    discardChanges: "\u653e\u5f03\u672a\u4fdd\u5b58\u7684\u66f4\u6539\u5e76\u6253\u5f00\u53e6\u4e00\u4e2a\u6587\u6863\uff1f",
     title: "Markdown 聚焦工作台", openFile: "打开文件", download: "下载副本",
     focusMode: "专注模式", documentMode: "文档 / 聚焦", syncMode: "同步",
     catalog: "目录", refresh: "刷新", catalogHint: "多选标题进行读取，单选标题进行修改。",
@@ -55,6 +59,14 @@ function updateDirtyState() {
   const dirty = state.content !== state.savedContent;
   $("dirtyBadge").dataset.state = dirty ? "dirty" : "clean";
   $("dirtyBadge").textContent = dirty ? "Unsaved" : "Saved";
+}
+
+function hasUnsavedChanges() {
+  return state.content !== state.savedContent;
+}
+
+function confirmDiscard() {
+  return !hasUnsavedChanges() || window.confirm(messages[state.language].discardChanges);
 }
 
 function renderContent() {
@@ -139,8 +151,10 @@ async function applyFocus() {
 
 async function openLocalFile(file) {
   if (!file || !file.name.toLowerCase().endsWith(".md")) throw new Error("Choose a .md file");
+  if (!confirmDiscard()) return false;
   setDocument(file.name, await file.text(), true);
   await refreshCatalog();
+  return true;
 }
 
 async function listRemote() {
@@ -153,6 +167,7 @@ async function listRemote() {
 }
 
 async function openRemote() {
+  if (!confirmDiscard()) return;
   const result = await api("/api/v1/sync/open", { remote: $("remoteInput").value.trim() });
   setDocument(result.name, result.content, true);
   await refreshCatalog();
@@ -241,7 +256,10 @@ $("editor").addEventListener("input", () => {
   $("focusApplyButton").disabled = true;
   updateDirtyState();
 });
-$("fileInput").addEventListener("change", handleError((event) => openLocalFile(event.target.files[0])));
+$("fileInput").addEventListener("change", handleError(async (event) => {
+  await openLocalFile(event.target.files[0]);
+  event.target.value = "";
+}));
 $("catalogButton").addEventListener("click", handleError(refreshCatalog));
 $("focusReadButton").addEventListener("click", handleError(readFocus));
 $("focusApplyButton").addEventListener("click", handleError(applyFocus));
@@ -259,6 +277,17 @@ $("focusModeButton").addEventListener("click", () => {
   $("focusModeButton").setAttribute("aria-pressed", String(document.body.classList.contains("focus-mode")));
 });
 $("languageSelect").addEventListener("change", (event) => { state.language = event.target.value; applyLanguage(); });
+document.querySelectorAll(".mobile-pane-switch button").forEach((button) => {
+  button.addEventListener("click", () => {
+    const pane = button.dataset.mobilePane;
+    document.querySelector(".editor-column").dataset.mobilePane = pane;
+    document.querySelectorAll(".mobile-pane-switch button").forEach((item) => {
+      const active = item === button;
+      item.classList.toggle("active", active);
+      item.setAttribute("aria-pressed", String(active));
+    });
+  });
+});
 $("remoteObjectSelect").addEventListener("change", (event) => {
   const id = event.target.value;
   if (id) $("remoteInput").value = `${$("collectionInput").value.trim()}/${id}`;
@@ -274,6 +303,11 @@ dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragging
 dropZone.addEventListener("drop", handleError(async (event) => {
   event.preventDefault(); dropZone.classList.remove("dragging"); await openLocalFile(event.dataTransfer.files[0]);
 }));
+window.addEventListener("beforeunload", (event) => {
+  if (!hasUnsavedChanges()) return;
+  event.preventDefault();
+  event.returnValue = "";
+});
 
 renderContent();
 applyLanguage();

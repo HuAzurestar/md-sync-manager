@@ -83,7 +83,11 @@
         </section>
       </aside>
 
-      <section class="editor-column">
+      <section class="editor-column" data-mobile-pane="editor">
+        <div class="mobile-pane-switch" role="group" aria-label="Editor and preview">
+          <button id="showEditorButton" class="active" type="button" aria-pressed="true" data-mobile-pane="editor" data-i18n="showEditor">Editor</button>
+          <button id="showPreviewButton" type="button" aria-pressed="false" data-mobile-pane="preview" data-i18n="showPreview">Preview</button>
+        </div>
         <div class="editor-pane">
           <div class="section-heading"><h2 data-i18n="editor">Editor</h2></div>
           <textarea id="editor" spellcheck="false" aria-label="Markdown editor"></textarea>

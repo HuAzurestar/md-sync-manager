@@ -22,6 +22,7 @@ class WorkbenchStaticTests(unittest.TestCase):
             "focusEditor", "focusApplyButton", "collectionInput", "remoteInput",
             "remoteListButton", "remoteOpenButton", "pullPreviewButton",
             "pullConfirmButton", "pushButton", "uploadButton", "providerSaveButton",
+            "showEditorButton", "showPreviewButton",
         }
 
         for element_id in required_ids:
@@ -48,6 +49,10 @@ class WorkbenchStaticTests(unittest.TestCase):
             with self.subTest(endpoint=endpoint):
                 self.assertIn(endpoint, script)
         self.assertIsNone(re.search(r"\breview\b", script, re.IGNORECASE))
+        self.assertIn('window.addEventListener("beforeunload"', script)
+        self.assertIn("confirmDiscard()", script)
+        self.assertNotIn("localStorage", script)
+        self.assertNotIn("sessionStorage", script)
 
     def test_javascript_has_valid_syntax(self):
         node = shutil.which("node")
@@ -74,6 +79,7 @@ class WorkbenchStaticTests(unittest.TestCase):
         self.assertIn("single-file", html.text)
         self.assertIn("refreshCatalog", script.text)
         self.assertIn("@media (max-width: 760px)", styles.text)
+        self.assertIn('data-mobile-pane="preview"', html.text)
 
 
 if __name__ == "__main__":
