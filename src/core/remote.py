@@ -80,6 +80,40 @@ class RemoteContent:
 
 
 @dataclass(frozen=True)
+class RemoteAccessPolicy:
+    """Deployment-level collection allowlist, independent of browser state."""
+
+    collections: tuple[str, ...] | None = None
+
+    @classmethod
+    def from_config(cls, config: dict) -> "RemoteAccessPolicy":
+        values = config.get("allowed_collections")
+        if values is None:
+            return cls()
+        if not isinstance(values, list) or not all(
+            isinstance(value, str) and value.strip() for value in values
+        ):
+            raise ValueError("allowed_collections must be a list of collection paths")
+        collections = tuple(
+            str(RemotePath.parse(value, require="collection")) for value in values
+        )
+        return cls(collections)
+
+    def allows(self, path: RemotePath) -> bool:
+        collection = str(RemotePath(path.source, path.resource_type, path.scope))
+        return self.collections is None or collection.casefold() in {
+            item.casefold() for item in self.collections
+        }
+
+    def require(self, path: RemotePath) -> None:
+        if not self.allows(path):
+            raise ValueError(
+                "remote collection is outside this instance's allowed scope: "
+                + ", ".join(self.collections or ())
+            )
+
+
+@dataclass(frozen=True)
 class RemoteItem:
     object_id: str
     title: str
