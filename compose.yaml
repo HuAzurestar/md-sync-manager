@@ -1,0 +1,16 @@
+services:
+  workbench:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      SMMD_HOST: "0.0.0.0"
+      SMMD_PORT: "8000"
+      SMMD_CONFIG: "/data/sync.yaml"
+      SMMD_LOG_DIR: "/data/logs"
+    volumes:
+      - sm-md-data:/data
+    restart: unless-stopped
+
+volumes:
+  sm-md-data:
