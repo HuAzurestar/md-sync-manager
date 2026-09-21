@@ -4,6 +4,8 @@ from fastapi import APIRouter, Request
 
 from src.api.models import (
     DocumentRequest,
+    FocusApplyRequest,
+    FocusReadRequest,
     ProviderUpdateRequest,
     PullConfirmRequest,
     PullPreviewRequest,
@@ -93,3 +95,28 @@ async def upload(payload: UploadRequest, request: Request):
 @router.post("/document/inspect")
 async def inspect_document(payload: DocumentRequest, request: Request):
     return success(_sync(request).inspect(payload.name, payload.content))
+
+
+@router.post("/document/catalog")
+async def catalog_document(payload: DocumentRequest, request: Request):
+    return success(_sync(request).catalog(payload.name, payload.content))
+
+
+@router.post("/document/focus/read")
+async def read_focus(payload: FocusReadRequest, request: Request):
+    return success(
+        _sync(request).focus_read(payload.name, payload.content, payload.selectors)
+    )
+
+
+@router.post("/document/focus/apply")
+async def apply_focus(payload: FocusApplyRequest, request: Request):
+    return success(
+        _sync(request).focus_apply(
+            payload.name,
+            payload.content,
+            selector=payload.selector,
+            expected_source=payload.expected_source,
+            replacement=payload.replacement,
+        )
+    )

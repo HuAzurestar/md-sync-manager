@@ -1,5 +1,7 @@
 """Content adapter between one browser document and file-oriented sync."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from difflib import unified_diff
 from pathlib import Path
@@ -9,6 +11,8 @@ import tempfile
 import time
 
 from src.core.document import MarkdownDocument, parse_text, render_document
+from src.core.catalog import catalog_text
+from src.core.focus import focus_apply_text, focus_read_text
 from src.core.remote import RemotePath
 from src.service.sync_service import PartialSyncError, SyncService
 
@@ -87,6 +91,44 @@ class WorkbenchSyncService:
             "remote": str(document.remote) if document.remote else None,
             "bound": document.remote is not None,
             "plain": False,
+        }
+
+    def catalog(self, name: str, content: str) -> dict[str, object]:
+        filename = self._filename(name)
+        return catalog_text(content, path=filename).as_dict()
+
+    def focus_read(
+        self, name: str, content: str, selectors: list[str]
+    ) -> dict[str, object]:
+        filename = self._filename(name)
+        sections = focus_read_text(content, selectors)
+        return {
+            "name": filename,
+            "sections": [section.as_dict() for section in sections],
+        }
+
+    def focus_apply(
+        self,
+        name: str,
+        content: str,
+        *,
+        selector: str,
+        expected_source: str,
+        replacement: str,
+    ) -> dict[str, object]:
+        filename = self._filename(name)
+        updated, previous = focus_apply_text(
+            content,
+            selector=selector,
+            expected_source=expected_source,
+            replacement=replacement,
+        )
+        refreshed = focus_read_text(updated, [replacement.splitlines()[0]])[0]
+        return {
+            "name": filename,
+            "content": updated,
+            "previous": previous.as_dict(),
+            "section": refreshed.as_dict(),
         }
 
     def preview_pull(

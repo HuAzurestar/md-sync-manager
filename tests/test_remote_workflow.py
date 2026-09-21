@@ -253,7 +253,15 @@ class ProviderContractTests(unittest.TestCase):
 
     def test_cli_has_only_the_confirmed_public_operations(self):
         parser = build_parser()
-        for command in ["list", "pull", "push", "upload", "catalog"]:
+        for command in [
+            "list",
+            "pull",
+            "push",
+            "upload",
+            "catalog",
+            "focus-read",
+            "focus-apply",
+        ]:
             with self.subTest(command=command):
                 arguments = [command]
                 if command == "list":
@@ -264,8 +272,20 @@ class ProviderContractTests(unittest.TestCase):
                     arguments += ["doc.md"]
                 elif command == "upload":
                     arguments += ["doc.md", "--target", "github/issues/o/r"]
-                else:
+                elif command == "catalog":
                     arguments += ["doc.md"]
+                elif command == "focus-read":
+                    arguments += ["doc.md", "--selector", "# Root"]
+                else:
+                    arguments += [
+                        "doc.md",
+                        "--selector",
+                        "# Root",
+                        "--expected-file",
+                        "expected.txt",
+                        "--replacement-file",
+                        "replacement.txt",
+                    ]
                 self.assertEqual(parser.parse_args(arguments).command, command)
         with redirect_stderr(StringIO()):
             with self.assertRaises(SystemExit):

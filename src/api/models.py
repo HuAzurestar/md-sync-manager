@@ -22,6 +22,16 @@ class DocumentRequest(BaseModel):
     content: str
 
 
+class FocusReadRequest(DocumentRequest):
+    selectors: list[str]
+
+
+class FocusApplyRequest(DocumentRequest):
+    selector: str
+    expected_source: str
+    replacement: str
+
+
 class PullPreviewRequest(DocumentRequest):
     source: str | None = None
 
