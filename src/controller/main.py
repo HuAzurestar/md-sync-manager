@@ -5,13 +5,14 @@ import sys
 from pathlib import Path
 
 from src.controller.sync_controller import SyncController
+from src.core.catalog import catalog_file, format_catalog
 from src.core.config import load_config
 from src.core.logging import get_logger
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="List, pull, push, or upload Markdown content"
+        description="Catalog or synchronize Markdown content"
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -39,6 +40,11 @@ def build_parser() -> argparse.ArgumentParser:
     upload.add_argument("--parent", help="optional parent object path")
     upload.add_argument("--base", help="base branch required for Pull Request upload")
     upload.add_argument("--head", help="head branch required for Pull Request upload")
+
+    catalog = commands.add_parser(
+        "catalog", help="list ATX headings from one Markdown file"
+    )
+    catalog.add_argument("file", type=Path)
     return parser
 
 
@@ -74,8 +80,11 @@ def main() -> None:
         )
 
     sys.excepthook = log_uncaught
-    config = load_config()
-    controller = SyncController(config)
+    if args.command == "catalog":
+        print(format_catalog(catalog_file(args.file)))
+        return
+
+    controller = SyncController(load_config())
     if args.command == "list":
         print(format_table(controller.list(args.target)))
     elif args.command == "pull":

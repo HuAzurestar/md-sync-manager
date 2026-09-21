@@ -251,9 +251,9 @@ class ProviderContractTests(unittest.TestCase):
         )
         self.assertEqual(len({provider.route for provider in providers}), 6)
 
-    def test_cli_has_only_the_four_public_operations(self):
+    def test_cli_has_only_the_confirmed_public_operations(self):
         parser = build_parser()
-        for command in ["list", "pull", "push", "upload"]:
+        for command in ["list", "pull", "push", "upload", "catalog"]:
             with self.subTest(command=command):
                 arguments = [command]
                 if command == "list":
@@ -262,8 +262,10 @@ class ProviderContractTests(unittest.TestCase):
                     arguments += ["doc.md"]
                 elif command == "push":
                     arguments += ["doc.md"]
-                else:
+                elif command == "upload":
                     arguments += ["doc.md", "--target", "github/issues/o/r"]
+                else:
+                    arguments += ["doc.md"]
                 self.assertEqual(parser.parse_args(arguments).command, command)
         with redirect_stderr(StringIO()):
             with self.assertRaises(SystemExit):
