@@ -12,6 +12,8 @@ class DockerDeliveryTests(unittest.TestCase):
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
 
         self.assertIn("FROM python:3.12-slim", dockerfile)
+        self.assertIn("addgroup --system --gid 10001 smmd", dockerfile)
+        self.assertIn("adduser --system --uid 10001", dockerfile)
         self.assertIn("USER smmd", dockerfile)
         self.assertIn("SMMD_CONFIG=/data/sync.yaml", dockerfile)
         self.assertIn("SMMD_LOG_DIR=/data/logs", dockerfile)

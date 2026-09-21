@@ -11,8 +11,8 @@ WORKDIR /app
 
 COPY requirements.txt ./
 RUN pip install --no-cache-dir --requirement requirements.txt \
-    && addgroup --system smmd \
-    && adduser --system --ingroup smmd smmd \
+    && addgroup --system --gid 10001 smmd \
+    && adduser --system --uid 10001 --ingroup smmd --no-create-home smmd \
     && mkdir -p /data \
     && chown smmd:smmd /data
 
