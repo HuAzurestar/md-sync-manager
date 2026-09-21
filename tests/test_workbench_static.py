@@ -23,6 +23,7 @@ class WorkbenchStaticTests(unittest.TestCase):
             "remoteListButton", "remoteOpenButton", "pullPreviewButton",
             "pullConfirmButton", "pushButton", "uploadButton", "providerSaveButton",
             "showEditorButton", "showPreviewButton",
+            "providerTokenStatus", "collectionExamples",
         }
 
         for element_id in required_ids:
@@ -53,6 +54,8 @@ class WorkbenchStaticTests(unittest.TestCase):
         self.assertIn("confirmDiscard()", script)
         self.assertNotIn("localStorage", script)
         self.assertNotIn("sessionStorage", script)
+        self.assertIn("renderProviderTokenStatus", script)
+        self.assertIn("setFocusMode", script)
 
     def test_javascript_has_valid_syntax(self):
         node = shutil.which("node")

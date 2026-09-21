@@ -9,30 +9,39 @@ const state = {
   selectedSection: null,
   pullPreviewId: null,
   language: "en",
+  providerConfig: null,
 };
 
 const messages = {
   en: {
     title: "Markdown Focus Workbench", openFile: "Open file", download: "Download",
-    focusMode: "Focus mode", documentMode: "Document / Focus", syncMode: "Sync",
+    immersiveMode: "Immersive editing", exitImmersive: "Exit immersive", documentMode: "Document / Sections", syncMode: "Sync",
     catalog: "Catalog", refresh: "Refresh", catalogHint: "Select several headings to read, or one heading to modify.",
     readSelection: "Read selection", focusSource: "Selected source", applySelection: "Apply selected section",
-    remoteSync: "Remote sync", collection: "Collection", listRemote: "List remote", remoteObject: "Remote object",
+    remoteSync: "Remote sync", collection: "Collection", collectionHint: "Use a complete collection path, for example youtrack/issues/DEMO.",
+    listRemote: "List remote", remoteObject: "Remote object", push: "Push", upload: "Upload / New",
     openRemote: "Open", pullPreview: "Preview pull", confirmPull: "Confirm pull", providerConfig: "Provider configuration",
-    enabled: "Enabled", saveProvider: "Save provider", editor: "Editor", preview: "Preview",
+    provider: "Provider", enabled: "Enabled", url: "URL", token: "Token", saveProvider: "Save provider", editor: "Editor", preview: "Preview",
     showEditor: "Editor", showPreview: "Preview",
     discardChanges: "Discard unsaved changes and open another document?",
+    saved: "Saved", unsaved: "Unsaved", focusEntered: "Immersive editing enabled; press Escape to exit",
+    focusExited: "Immersive editing disabled", tokenConfigured: "Token configured", tokenMissing: "Token not configured",
+    tokenKeep: "Leave blank to keep the configured token", tokenEnter: "Enter a provider token",
   },
   zh: {
     showEditor: "\u7f16\u8f91", showPreview: "\u9884\u89c8",
     discardChanges: "\u653e\u5f03\u672a\u4fdd\u5b58\u7684\u66f4\u6539\u5e76\u6253\u5f00\u53e6\u4e00\u4e2a\u6587\u6863\uff1f",
     title: "Markdown 聚焦工作台", openFile: "打开文件", download: "下载副本",
-    focusMode: "专注模式", documentMode: "文档 / 聚焦", syncMode: "同步",
+    immersiveMode: "沉浸编辑", exitImmersive: "退出沉浸", documentMode: "文档 / 章节", syncMode: "同步",
     catalog: "目录", refresh: "刷新", catalogHint: "多选标题进行读取，单选标题进行修改。",
     readSelection: "读取所选", focusSource: "所选原文", applySelection: "应用所选章节",
-    remoteSync: "远端同步", collection: "集合路径", listRemote: "列出远端", remoteObject: "远端对象",
+    remoteSync: "远端同步", collection: "集合路径", collectionHint: "请输入完整集合路径，例如 youtrack/issues/DEMO。",
+    listRemote: "列出远端", remoteObject: "远端对象", push: "推送", upload: "上传 / 新建",
     openRemote: "打开", pullPreview: "预览拉取", confirmPull: "确认拉取", providerConfig: "Provider 配置",
-    enabled: "启用", saveProvider: "保存 Provider", editor: "编辑器", preview: "预览",
+    provider: "Provider", enabled: "启用", url: "地址", token: "令牌", saveProvider: "保存 Provider", editor: "编辑器", preview: "预览",
+    saved: "已保存", unsaved: "未保存", focusEntered: "已进入沉浸编辑；按 Esc 退出",
+    focusExited: "已退出沉浸编辑", tokenConfigured: "令牌已配置", tokenMissing: "令牌未配置",
+    tokenKeep: "留空可保留当前令牌", tokenEnter: "请输入 Provider 令牌",
   },
 };
 
@@ -58,7 +67,33 @@ function setStatus(message, error = false) {
 function updateDirtyState() {
   const dirty = state.content !== state.savedContent;
   $("dirtyBadge").dataset.state = dirty ? "dirty" : "clean";
-  $("dirtyBadge").textContent = dirty ? "Unsaved" : "Saved";
+  $("dirtyBadge").textContent = messages[state.language][dirty ? "unsaved" : "saved"];
+}
+
+function updateFocusModeButton() {
+  const active = document.body.classList.contains("focus-mode");
+  const button = $("focusModeButton");
+  button.textContent = messages[state.language][active ? "exitImmersive" : "immersiveMode"];
+  button.setAttribute("aria-pressed", String(active));
+  button.title = active ? messages[state.language].focusExited : messages[state.language].focusEntered;
+}
+
+function renderProviderTokenStatus() {
+  const provider = state.providerConfig;
+  if (!provider) return;
+  const status = $("providerTokenStatus");
+  const configured = provider.token_configured;
+  const source = provider.token_source ? ` · ${provider.token_source}` : "";
+  status.dataset.state = configured ? "configured" : "missing";
+  status.textContent = `${messages[state.language][configured ? "tokenConfigured" : "tokenMissing"]}${source}`;
+  $("providerToken").placeholder = messages[state.language][configured ? "tokenKeep" : "tokenEnter"];
+}
+
+function setFocusMode(active) {
+  document.body.classList.toggle("focus-mode", active);
+  updateFocusModeButton();
+  setStatus(messages[state.language][active ? "focusEntered" : "focusExited"]);
+  if (active) $("editor").focus();
 }
 
 function hasUnsavedChanges() {
@@ -211,9 +246,11 @@ async function uploadDocument() {
 async function loadProvider() {
   const config = await api("/api/v1/providers", null, "GET");
   const provider = config.providers[$("providerSelect").value];
+  state.providerConfig = provider;
   $("providerEnabled").checked = provider.enabled;
   $("providerUrl").value = provider.url;
   $("providerToken").value = "";
+  renderProviderTokenStatus();
 }
 
 async function saveProvider() {
@@ -229,10 +266,13 @@ async function saveProvider() {
 function downloadDocument() {
   const blob = new Blob([state.content], { type: "text/markdown;charset=utf-8" });
   const anchor = document.createElement("a");
-  anchor.href = URL.createObjectURL(blob);
+  const objectUrl = URL.createObjectURL(blob);
+  anchor.href = objectUrl;
   anchor.download = state.name;
+  document.body.append(anchor);
   anchor.click();
-  URL.revokeObjectURL(anchor.href);
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }
 
 function applyLanguage() {
@@ -240,6 +280,9 @@ function applyLanguage() {
   document.querySelectorAll("[data-i18n]").forEach((node) => {
     node.textContent = messages[state.language][node.dataset.i18n] || node.textContent;
   });
+  updateDirtyState();
+  updateFocusModeButton();
+  renderProviderTokenStatus();
 }
 
 function handleError(action) {
@@ -273,8 +316,10 @@ $("providerSelect").addEventListener("change", handleError(loadProvider));
 $("providerSaveButton").addEventListener("click", handleError(saveProvider));
 $("downloadButton").addEventListener("click", downloadDocument);
 $("focusModeButton").addEventListener("click", () => {
-  document.body.classList.toggle("focus-mode");
-  $("focusModeButton").setAttribute("aria-pressed", String(document.body.classList.contains("focus-mode")));
+  setFocusMode(!document.body.classList.contains("focus-mode"));
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && document.body.classList.contains("focus-mode")) setFocusMode(false);
 });
 $("languageSelect").addEventListener("change", (event) => { state.language = event.target.value; applyLanguage(); });
 document.querySelectorAll(".mobile-pane-switch button").forEach((button) => {

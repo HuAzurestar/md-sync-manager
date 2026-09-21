@@ -11,8 +11,8 @@ from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 BROWSER_CANDIDATES = (
-    Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
     Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
+    Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
 )
 
 
@@ -115,6 +115,17 @@ class WorkbenchBrowserTests(unittest.TestCase):
         self.assertEqual(editor.input_value(), "# Replacement\n")
         self.assertEqual(self.page.locator("#dirtyBadge").get_attribute("data-state"), "clean")
 
+    def test_download_matches_editor_bytes(self):
+        content = "# Download check\n\n中文与 symbols: <>&\n"
+        self.page.locator("#editor").fill(content)
+
+        with self.page.expect_download() as download_info:
+            self.page.locator("#downloadButton").click()
+        download = download_info.value
+
+        self.assertEqual(download.suggested_filename, "untitled.md")
+        self.assertEqual(Path(download.path()).read_bytes(), content.encode("utf-8"))
+
     def test_focus_apply_failure_feedback_and_narrow_pane_switch(self):
         self.page.locator("#editor").fill(
             "# Root\nintro\n## One\nold\n## Two\nlast\n"
@@ -139,6 +150,16 @@ class WorkbenchBrowserTests(unittest.TestCase):
         )
         self.assertIn("## One\nnew\n", self.page.locator("#editor").input_value())
 
+        focus_button = self.page.locator("#focusModeButton")
+        focus_button.click()
+        self.assertTrue(self.page.locator("body").evaluate("node => node.classList.contains('focus-mode')"))
+        self.assertEqual(focus_button.get_attribute("aria-pressed"), "true")
+        self.assertEqual(focus_button.inner_text(), "Exit immersive")
+        self.assertEqual(self.page.evaluate("document.activeElement.id"), "editor")
+        self.page.keyboard.press("Escape")
+        self.assertFalse(self.page.locator("body").evaluate("node => node.classList.contains('focus-mode')"))
+        self.assertEqual(focus_button.inner_text(), "Immersive editing")
+
         self.page.set_viewport_size({"width": 600, "height": 800})
         self.assertTrue(self.page.locator(".preview-pane").is_hidden())
         self.page.locator("#showPreviewButton").click()
@@ -156,6 +177,29 @@ class WorkbenchBrowserTests(unittest.TestCase):
             "document.querySelector('#statusMessage').dataset.error === 'true'"
         )
         self.assertTrue(status.inner_text().strip())
+
+    def test_provider_token_state_is_clear_and_secret_is_not_echoed(self):
+        self.page.locator('[data-panel="syncPanel"]').click()
+        self.page.locator("details summary").click()
+        self.page.locator("#providerSelect").select_option("youtrack")
+        self.page.wait_for_function(
+            "document.querySelector('#providerTokenStatus').textContent.length > 0"
+        )
+        self.assertIn(
+            self.page.locator("#providerTokenStatus").get_attribute("data-state"),
+            {"configured", "missing"},
+        )
+
+        self.page.locator("#providerToken").fill("browser-only-secret")
+        self.page.locator("#providerSaveButton").click()
+        self.page.wait_for_function(
+            "document.querySelector('#providerTokenStatus').textContent.includes('Token configured')"
+        )
+        self.assertEqual(self.page.locator("#providerToken").input_value(), "")
+        response_text = self.page.evaluate(
+            "fetch('/api/v1/providers').then(response => response.text())"
+        )
+        self.assertNotIn("browser-only-secret", response_text)
 
     def test_remote_list_open_pull_push_and_upload_controls(self):
         def fulfill(route):
