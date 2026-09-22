@@ -15,7 +15,6 @@
       <div class="header-actions">
         <label class="button" for="fileInput" data-i18n="openFile">Open file</label>
         <input id="fileInput" type="file" accept=".md,text/markdown" hidden>
-        <button id="downloadButton" type="button" data-i18n="download">Download</button>
         <button id="focusModeButton" type="button" aria-pressed="false" data-i18n="immersiveMode">Immersive editing</button>
         <select id="languageSelect" aria-label="Language">
           <option value="en">English</option>
@@ -34,45 +33,95 @@
     <main id="dropZone" class="workspace">
       <aside class="control-column">
         <section id="documentPanel" class="control-panel active">
-          <div class="section-heading">
-            <h2 data-i18n="catalog">Catalog</h2>
-            <button id="catalogButton" type="button" data-i18n="refresh">Refresh</button>
+          <div class="tool-section">
+            <div class="section-heading">
+              <div>
+                <p class="step-label" data-i18n="stepOne">Step 1</p>
+                <h2 data-i18n="catalog">Catalog</h2>
+              </div>
+              <button id="catalogButton" type="button" data-i18n="refresh">Refresh</button>
+            </div>
+            <p class="hint" data-i18n="catalogHint">Select headings from the current document.</p>
+            <div id="catalogList" class="catalog-list" aria-live="polite"></div>
           </div>
-          <p class="hint" data-i18n="catalogHint">Select several headings to read, or one heading to modify.</p>
-          <div id="catalogList" class="catalog-list" aria-live="polite"></div>
-          <button id="focusReadButton" type="button" disabled data-i18n="readSelection">Read selection</button>
-          <label for="focusEditor" data-i18n="focusSource">Selected source</label>
-          <textarea id="focusEditor" rows="10" spellcheck="false"></textarea>
-          <button id="focusApplyButton" type="button" disabled data-i18n="applySelection">Apply selected section</button>
+
+          <div class="tool-section">
+            <div class="section-heading">
+              <div>
+                <p class="step-label" data-i18n="stepTwo">Step 2</p>
+                <h2 data-i18n="focusReadTitle">Focus read</h2>
+              </div>
+              <span id="focusSelectionBadge" class="selection-badge">0 selected</span>
+            </div>
+            <p class="hint" data-i18n="focusReadHint">Select one or more headings, then read their exact source.</p>
+            <button id="focusReadButton" type="button" disabled data-i18n="readSelection">Read selected sections</button>
+            <pre id="focusReadOutput" class="focus-output" aria-live="polite"></pre>
+          </div>
+
+          <div class="tool-section">
+            <div>
+              <p class="step-label" data-i18n="stepThree">Step 3</p>
+              <h2 data-i18n="focusWriteTitle">Focus write</h2>
+            </div>
+            <p id="focusWriteHint" class="hint" data-i18n="focusWriteHint">Select exactly one heading and read it before editing.</p>
+            <label for="focusEditor" data-i18n="focusSource">Selected section source</label>
+            <textarea id="focusEditor" rows="10" spellcheck="false" disabled></textarea>
+            <button id="focusApplyButton" type="button" disabled data-i18n="applySelection">Write selected section</button>
+          </div>
         </section>
 
         <section id="syncPanel" class="control-panel">
-          <h2 data-i18n="remoteSync">Remote sync</h2>
-          <label for="collectionInput" data-i18n="collection">Collection</label>
-          <input id="collectionInput" value="youtrack/issues/DEMO" list="collectionExamples">
-          <datalist id="collectionExamples">
-            <option value="youtrack/issues/DEMO"></option>
-            <option value="youtrack/articles/DEMO"></option>
-            <option value="github/issues/owner/repo"></option>
-            <option value="gitee/issues/owner/repo"></option>
-          </datalist>
-          <p class="hint" data-i18n="collectionHint">Use a complete collection path, for example youtrack/issues/DEMO.</p>
-          <button id="remoteListButton" type="button" data-i18n="listRemote">List remote</button>
-          <select id="remoteObjectSelect" aria-label="Remote objects">
-            <option value="">—</option>
-          </select>
-          <label for="remoteInput" data-i18n="remoteObject">Remote object</label>
-          <input id="remoteInput" placeholder="youtrack/issues/DEMO/1">
-          <div class="button-grid">
-            <button id="remoteOpenButton" type="button" data-i18n="openRemote">Open</button>
-            <button id="pullPreviewButton" type="button" data-i18n="pullPreview">Preview pull</button>
-            <button id="pullConfirmButton" type="button" disabled data-i18n="confirmPull">Confirm pull</button>
-            <button id="pushButton" type="button" data-i18n="push">Push</button>
-            <button id="uploadButton" type="button" data-i18n="upload">Upload / New</button>
+          <div class="tool-section">
+            <h2 data-i18n="remoteBrowse">Remote list</h2>
+            <label for="collectionInput" data-i18n="collection">Collection</label>
+            <input id="collectionInput" value="youtrack/issues/DEMO" list="collectionExamples">
+            <datalist id="collectionExamples">
+              <option value="youtrack/issues/DEMO"></option>
+              <option value="youtrack/articles/DEMO"></option>
+              <option value="github/issues/owner/repo"></option>
+              <option value="gitee/issues/owner/repo"></option>
+            </datalist>
+            <p class="hint" data-i18n="collectionHint">Use a complete collection path, for example youtrack/issues/DEMO.</p>
+            <button id="remoteListButton" type="button" data-i18n="listRemote">List remote</button>
+            <select id="remoteObjectSelect" aria-label="Remote objects">
+              <option value="">—</option>
+            </select>
+            <label for="remoteInput" data-i18n="remoteObject">Remote object</label>
+            <input id="remoteInput" placeholder="youtrack/issues/DEMO/1">
+            <button id="remoteOpenButton" type="button" data-i18n="openRemote">Open remote</button>
           </div>
-          <pre id="syncOutput" class="output" aria-live="polite"></pre>
 
-          <details>
+          <div class="tool-section transfer-section">
+            <h2 data-i18n="transferTitle">Transfer</h2>
+            <p class="hint" data-i18n="transferHint">Preview remote changes before replacing either side.</p>
+            <div class="transfer-row">
+              <div><strong data-i18n="pull">Pull</strong><span data-i18n="pullHint">Remote → editor</span></div>
+              <div class="row-actions">
+                <button id="pullPreviewButton" type="button" data-i18n="preview">Preview</button>
+                <button id="pullConfirmButton" type="button" disabled data-i18n="confirm">Confirm</button>
+              </div>
+            </div>
+            <div class="transfer-row">
+              <div><strong data-i18n="push">Push</strong><span data-i18n="pushHint">Editor → remote</span></div>
+              <div class="row-actions">
+                <button id="pushPreviewButton" type="button" data-i18n="preview">Preview</button>
+                <button id="pushConfirmButton" type="button" disabled data-i18n="confirm">Confirm</button>
+              </div>
+            </div>
+            <div class="transfer-row">
+              <div><strong data-i18n="fileCopies">File copies</strong><span data-i18n="fileCopiesHint">Local copy or new remote</span></div>
+              <div class="row-actions">
+                <button id="downloadButton" type="button" data-i18n="download">Download</button>
+                <button id="uploadButton" type="button" data-i18n="upload">Upload / New</button>
+              </div>
+            </div>
+            <div>
+              <p class="output-label" data-i18n="changePreview">Change preview / result</p>
+              <div id="syncOutput" class="output" aria-live="polite"></div>
+            </div>
+          </div>
+
+          <details class="tool-section">
             <summary data-i18n="providerConfig">Provider configuration</summary>
             <label for="providerSelect" data-i18n="provider">Provider</label>
             <select id="providerSelect">
@@ -97,12 +146,12 @@
           <button id="showPreviewButton" type="button" aria-pressed="false" data-mobile-pane="preview" data-i18n="showPreview">Preview</button>
         </div>
         <div class="editor-pane">
-          <div class="section-heading"><h2 data-i18n="editor">Editor</h2></div>
+          <div class="section-heading"><h2 data-i18n="editor">Markdown source</h2><span class="pane-kind" data-i18n="sourceBadge">Editable source</span></div>
           <textarea id="editor" spellcheck="false" aria-label="Markdown editor"></textarea>
         </div>
         <div class="preview-pane">
-          <div class="section-heading"><h2 data-i18n="preview">Preview</h2></div>
-          <pre id="preview" tabindex="0"></pre>
+          <div class="section-heading"><h2 data-i18n="preview">Rendered preview</h2><span class="pane-kind preview-kind" data-i18n="renderedBadge">Rendered result</span></div>
+          <article id="preview" class="markdown-preview" tabindex="0" aria-label="Rendered Markdown preview"></article>
         </div>
       </section>
     </main>

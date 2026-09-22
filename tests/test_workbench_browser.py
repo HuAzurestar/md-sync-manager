@@ -118,6 +118,7 @@ class WorkbenchBrowserTests(unittest.TestCase):
     def test_download_matches_editor_bytes(self):
         content = "# Download check\n\n中文与 symbols: <>&\n"
         self.page.locator("#editor").fill(content)
+        self.page.locator('[data-panel="syncPanel"]').click()
 
         with self.page.expect_download() as download_info:
             self.page.locator("#downloadButton").click()
@@ -136,19 +137,27 @@ class WorkbenchBrowserTests(unittest.TestCase):
         choices.nth(2).check()
         self.page.locator("#focusReadButton").click()
         self.page.wait_for_function(
-            "document.querySelector('#focusEditor').value.includes('## Two')"
+            "document.querySelector('#focusReadOutput').textContent.includes('## Two')"
         )
-        multi_source = self.page.locator("#focusEditor").input_value()
+        multi_source = self.page.locator("#focusReadOutput").inner_text()
         self.assertLess(multi_source.index("## One"), multi_source.index("## Two"))
+        self.assertTrue(self.page.locator("#focusEditor").is_disabled())
 
         choices.nth(2).uncheck()
         self.page.locator("#focusReadButton").click()
+        self.assertFalse(self.page.locator("#focusEditor").is_disabled())
         self.page.locator("#focusEditor").fill("## One\nnew\n")
         self.page.locator("#focusApplyButton").click()
         self.page.wait_for_function(
             "document.querySelector('#editor').value.includes('## One\\nnew\\n')"
         )
         self.assertIn("## One\nnew\n", self.page.locator("#editor").input_value())
+
+        self.page.locator("#editor").fill("# Rendered\n\n**bold** text\n\n- item\n")
+        self.assertEqual(self.page.locator("#preview h1").inner_text(), "Rendered")
+        self.assertEqual(self.page.locator("#preview strong").inner_text(), "bold")
+        self.assertEqual(self.page.locator("#preview li").inner_text(), "item")
+        self.assertNotIn("# Rendered", self.page.locator("#preview").inner_text())
 
         focus_button = self.page.locator("#focusModeButton")
         focus_button.click()
@@ -213,7 +222,9 @@ class WorkbenchBrowserTests(unittest.TestCase):
                 data = {"preview_id": "browser-preview", "diff": "remote update"}
             elif path.endswith("/sync/pull/confirm"):
                 data = {"content": "# Remote\npulled\n"}
-            elif path.endswith("/sync/push"):
+            elif path.endswith("/sync/push/preview"):
+                data = {"preview_id": "push-preview", "diff": "-remote\n+push me"}
+            elif path.endswith("/sync/push/confirm"):
                 data = {"result": {"status": "success", "remote": "7"}}
             elif path.endswith("/sync/upload"):
                 data = {
@@ -250,7 +261,12 @@ class WorkbenchBrowserTests(unittest.TestCase):
         )
 
         self.page.locator("#editor").fill("# Remote\npush me\n")
-        self.page.locator("#pushButton").click()
+        self.page.locator("#pushPreviewButton").click()
+        self.page.wait_for_function(
+            "!document.querySelector('#pushConfirmButton').disabled"
+        )
+        self.assertIn("push me", self.page.locator("#syncOutput").inner_text())
+        self.page.locator("#pushConfirmButton").click()
         self.page.wait_for_function(
             "document.querySelector('#statusMessage').textContent === 'Push complete'"
         )

@@ -19,9 +19,9 @@ class WorkbenchStaticTests(unittest.TestCase):
         html = (UI / "index.html").read_text(encoding="utf-8")
         required_ids = {
             "fileInput", "editor", "preview", "catalogList", "focusReadButton",
-            "focusEditor", "focusApplyButton", "collectionInput", "remoteInput",
+            "focusReadOutput", "focusEditor", "focusApplyButton", "collectionInput", "remoteInput",
             "remoteListButton", "remoteOpenButton", "pullPreviewButton",
-            "pullConfirmButton", "pushButton", "uploadButton", "providerSaveButton",
+            "pullConfirmButton", "pushPreviewButton", "pushConfirmButton", "uploadButton", "providerSaveButton",
             "showEditorButton", "showPreviewButton",
             "providerTokenStatus", "collectionExamples",
         }
@@ -30,6 +30,7 @@ class WorkbenchStaticTests(unittest.TestCase):
             with self.subTest(element_id=element_id):
                 self.assertIn(f'id="{element_id}"', html)
         self.assertIn('data-workbench="single-file"', html)
+        self.assertIn('<article id="preview"', html)
         self.assertIsNone(re.search(r"\breview\b", html, re.IGNORECASE))
         self.assertNotIn("tablist", html)
 
@@ -43,7 +44,8 @@ class WorkbenchStaticTests(unittest.TestCase):
             "/api/v1/sync/open",
             "/api/v1/sync/pull/preview",
             "/api/v1/sync/pull/confirm",
-            "/api/v1/sync/push",
+            "/api/v1/sync/push/preview",
+            "/api/v1/sync/push/confirm",
             "/api/v1/sync/upload",
             "/api/v1/providers",
         ]:
@@ -56,6 +58,8 @@ class WorkbenchStaticTests(unittest.TestCase):
         self.assertNotIn("sessionStorage", script)
         self.assertIn("renderProviderTokenStatus", script)
         self.assertIn("setFocusMode", script)
+        self.assertIn("renderMarkdownPreview", script)
+        self.assertNotIn('$("preview").textContent = state.content', script)
 
     def test_javascript_has_valid_syntax(self):
         node = shutil.which("node")
