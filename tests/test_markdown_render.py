@@ -28,12 +28,16 @@ class MarkdownRenderTests(unittest.TestCase):
     def test_raw_html_is_not_executed(self):
         response = self.client.post(
             "/api/v1/document/render",
-            json={"name": "unsafe.md", "content": '<script>alert("x")</script>\n'},
+            json={
+                "name": "unsafe.md",
+                "content": '<script>alert("x")</script>\n\n[x](javascript:alert(1))\n',
+            },
         )
 
         html = response.json()["data"]["html"]
         self.assertNotIn("<script>", html)
         self.assertIn("&lt;script&gt;", html)
+        self.assertNotIn('href="javascript:', html)
 
 
 if __name__ == "__main__":

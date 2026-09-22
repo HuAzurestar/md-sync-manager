@@ -16,12 +16,13 @@ Open <http://127.0.0.1:8000>. The server listens on loopback by default. `SMMD_C
 
 The Workbench keeps one document open at a time:
 
-1. Open or drag a `.md` file, then edit its source beside the rendered Markdown preview.
+1. Open or drag a `.md` file. The single work area opens in **Markdown source** mode.
 2. In **Document / Sections**, use the three explicit steps: refresh the catalog, read one or more selected headings, then write back exactly one selected section.
 3. In **Sync**, use **Remote list** to browse and open objects. Use **Transfer** for the grouped Pull, Push, Download, and Upload/New operations.
-4. Preview the diff before confirming either a pull or a push. Download saves a browser-edited copy, while Upload/New creates a remote object.
+4. Use the lower-left mode switch for **Difference**, **Markdown source**, or the secondary read-only **Render** view. Document and save state stays at the upper right of the work area.
+5. Preview the diff before confirming either a pull or a push. Download saves a browser-edited copy, while Upload/New creates a remote object.
 
-On narrow screens, use the Editor/Preview switch. Pull and push are always preview-plus-confirm operations. Focus apply rejects stale source and leaves the document unchanged.
+Render mode uses `markdown-it-py` in CommonMark mode with raw HTML disabled; md-sync does not implement its own Markdown parser. Mermaid fences remain ordinary code blocks. Pull and push are always preview-plus-confirm operations. Focus apply rejects stale source and leaves the document unchanged.
 
 ## Docker
 
