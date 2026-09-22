@@ -192,10 +192,10 @@ class WorkbenchBrowserTests(unittest.TestCase):
 
         self.page.locator("#providerToken").fill("browser-only-secret")
         self.page.locator("#providerSaveButton").click()
-        self.page.wait_for_function(
-            "document.querySelector('#providerTokenStatus').textContent.includes('Token configured')"
-        )
         self.assertEqual(self.page.locator("#providerToken").input_value(), "")
+        self.page.wait_for_function(
+            "document.querySelector('#statusMessage').textContent.includes('configuration saved')"
+        )
         response_text = self.page.evaluate(
             "fetch('/api/v1/providers').then(response => response.text())"
         )

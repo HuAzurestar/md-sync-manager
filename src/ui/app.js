@@ -255,10 +255,11 @@ async function loadProvider() {
 
 async function saveProvider() {
   const name = $("providerSelect").value;
+  const tokenInput = $("providerToken");
   const values = { enabled: $("providerEnabled").checked, url: $("providerUrl").value.trim() };
-  if ($("providerToken").value) values.token = $("providerToken").value;
+  if (tokenInput.value) values.token = tokenInput.value;
+  tokenInput.value = "";
   await api("/api/v1/providers", { providers: { [name]: values } }, "PUT");
-  $("providerToken").value = "";
   setStatus(`${name} configuration saved`);
   await loadProvider();
 }
