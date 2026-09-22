@@ -154,10 +154,16 @@ class WorkbenchBrowserTests(unittest.TestCase):
         self.assertIn("## One\nnew\n", self.page.locator("#editor").input_value())
 
         self.page.locator("#editor").fill("# Rendered\n\n**bold** text\n\n- item\n")
+        self.page.locator('[data-editor-mode="render"]').click()
+        self.page.locator("#preview h1").wait_for()
         self.assertEqual(self.page.locator("#preview h1").inner_text(), "Rendered")
         self.assertEqual(self.page.locator("#preview strong").inner_text(), "bold")
         self.assertEqual(self.page.locator("#preview li").inner_text(), "item")
         self.assertNotIn("# Rendered", self.page.locator("#preview").inner_text())
+        self.assertTrue(self.page.locator("#editor").is_hidden())
+        self.page.locator('[data-editor-mode="source"]').click()
+        self.assertTrue(self.page.locator("#editor").is_visible())
+        self.assertTrue(self.page.locator("#preview").is_hidden())
 
         focus_button = self.page.locator("#focusModeButton")
         focus_button.click()
@@ -170,12 +176,8 @@ class WorkbenchBrowserTests(unittest.TestCase):
         self.assertEqual(focus_button.inner_text(), "Immersive editing")
 
         self.page.set_viewport_size({"width": 600, "height": 800})
-        self.assertTrue(self.page.locator(".preview-pane").is_hidden())
-        self.page.locator("#showPreviewButton").click()
-        self.assertTrue(self.page.locator(".editor-pane").is_hidden())
-        self.assertTrue(self.page.locator(".preview-pane").is_visible())
-        self.page.locator("#showEditorButton").click()
-        self.assertTrue(self.page.locator(".editor-pane").is_visible())
+        self.assertTrue(self.page.locator("#editor").is_visible())
+        self.assertTrue(self.page.locator(".editor-mode-switch").is_visible())
 
         self.page.locator('[data-panel="syncPanel"]').click()
         self.page.locator("#remoteInput").fill("not-a-supported-remote")
@@ -255,6 +257,11 @@ class WorkbenchBrowserTests(unittest.TestCase):
             "!document.querySelector('#pullConfirmButton').disabled"
         )
         self.assertIn("remote update", self.page.locator("#syncOutput").inner_text())
+        self.assertEqual(
+            self.page.locator(".editor-column").get_attribute("data-editor-mode"),
+            "difference",
+        )
+        self.assertTrue(self.page.locator("#editor").is_hidden())
         self.page.locator("#pullConfirmButton").click()
         self.page.wait_for_function(
             "document.querySelector('#editor').value.includes('pulled')"
@@ -266,6 +273,10 @@ class WorkbenchBrowserTests(unittest.TestCase):
             "!document.querySelector('#pushConfirmButton').disabled"
         )
         self.assertIn("push me", self.page.locator("#syncOutput").inner_text())
+        self.assertEqual(
+            self.page.locator(".editor-column").get_attribute("data-editor-mode"),
+            "difference",
+        )
         self.page.locator("#pushConfirmButton").click()
         self.page.wait_for_function(
             "document.querySelector('#statusMessage').textContent === 'Push complete'"

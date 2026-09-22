@@ -11,6 +11,8 @@ const state = {
   pushPreviewId: null,
   language: "en",
   providerConfig: null,
+  editorMode: "source",
+  renderedContent: null,
 };
 
 const messages = {
@@ -27,10 +29,9 @@ const messages = {
     openRemote: "Open remote", transferPreview: "Preview changes", confirm: "Confirm", providerConfig: "Provider configuration",
     transferTitle: "Transfer", transferHint: "Preview remote changes before replacing either side.",
     pullHint: "Remote → editor", pushHint: "Editor → remote", fileCopies: "File copies", fileCopiesHint: "Local copy or new remote",
-    changePreview: "Change preview / result",
-    provider: "Provider", enabled: "Enabled", url: "URL", token: "Token", saveProvider: "Save provider", editor: "Markdown source", preview: "Rendered preview",
-    sourceBadge: "Editable source", renderedBadge: "Rendered result",
-    showEditor: "Editor", showPreview: "Preview",
+    provider: "Provider", enabled: "Enabled", url: "URL", token: "Token", saveProvider: "Save provider", editor: "Markdown source", preview: "Rendered Markdown",
+    differenceMode: "Difference", sourceMode: "Markdown source", renderMode: "Render",
+    differenceHint: "Inspect the latest pull or push difference.", sourceHint: "Edit the Markdown text directly.", renderHint: "Secondary read-only view rendered with CommonMark.", rendering: "Rendering…",
     discardChanges: "Discard unsaved changes and open another document?",
     saved: "Saved", unsaved: "Unsaved", focusEntered: "Immersive editing enabled; press Escape to exit",
     focusExited: "Immersive editing disabled", tokenConfigured: "Token configured", tokenMissing: "Token not configured",
@@ -39,7 +40,6 @@ const messages = {
     focusWriteMultiple: "Multiple sections can be read together; select exactly one and read again to enable writing.",
   },
   zh: {
-    showEditor: "\u7f16\u8f91", showPreview: "\u9884\u89c8",
     discardChanges: "\u653e\u5f03\u672a\u4fdd\u5b58\u7684\u66f4\u6539\u5e76\u6253\u5f00\u53e6\u4e00\u4e2a\u6587\u6863\uff1f",
     title: "Markdown 聚焦工作台", openFile: "打开文件", download: "下载副本",
     immersiveMode: "沉浸编辑", exitImmersive: "退出沉浸", documentMode: "文档 / 章节", syncMode: "同步",
@@ -53,9 +53,9 @@ const messages = {
     openRemote: "打开远端", transferPreview: "预览差异", confirm: "确认", providerConfig: "Provider 配置",
     transferTitle: "传输操作", transferHint: "覆盖本地或远端前，先预览变化。",
     pullHint: "远端 → 编辑器", pushHint: "编辑器 → 远端", fileCopies: "文件副本", fileCopiesHint: "下载本地副本或新建远端",
-    changePreview: "差异预览 / 操作结果",
-    provider: "Provider", enabled: "启用", url: "地址", token: "令牌", saveProvider: "保存 Provider", editor: "Markdown 源码", preview: "渲染预览",
-    sourceBadge: "可编辑源码", renderedBadge: "渲染结果",
+    provider: "Provider", enabled: "启用", url: "地址", token: "令牌", saveProvider: "保存 Provider", editor: "Markdown 源码", preview: "Markdown 渲染",
+    differenceMode: "差异", sourceMode: "Markdown 源码", renderMode: "渲染",
+    differenceHint: "检查最近一次 Pull 或 Push 的差异。", sourceHint: "直接编辑 Markdown 文本。", renderHint: "使用 CommonMark 的次要只读视图。", rendering: "正在渲染…",
     saved: "已保存", unsaved: "未保存", focusEntered: "已进入沉浸编辑；按 Esc 退出",
     focusExited: "已退出沉浸编辑", tokenConfigured: "令牌已配置", tokenMissing: "令牌未配置",
     tokenKeep: "留空可保留当前令牌", tokenEnter: "请输入 Provider 令牌",
@@ -112,7 +112,10 @@ function setFocusMode(active) {
   document.body.classList.toggle("focus-mode", active);
   updateFocusModeButton();
   setStatus(messages[state.language][active ? "focusEntered" : "focusExited"]);
-  if (active) $("editor").focus();
+  if (active) {
+    setEditorMode("source");
+    $("editor").focus();
+  }
 }
 
 function hasUnsavedChanges() {
@@ -123,136 +126,35 @@ function confirmDiscard() {
   return !hasUnsavedChanges() || window.confirm(messages[state.language].discardChanges);
 }
 
-function appendInlineMarkdown(target, source) {
-  const pattern = /(\*\*[^*\n]+\*\*|`[^`\n]+`|\*[^*\n]+\*|\[[^\]\n]+\]\((?:https?:\/\/|mailto:)[^)\s]+\))/g;
-  let cursor = 0;
-  for (const match of source.matchAll(pattern)) {
-    target.append(document.createTextNode(source.slice(cursor, match.index)));
-    const token = match[0];
-    let node;
-    if (token.startsWith("**")) {
-      node = document.createElement("strong");
-      node.textContent = token.slice(2, -2);
-    } else if (token.startsWith("`")) {
-      node = document.createElement("code");
-      node.textContent = token.slice(1, -1);
-    } else if (token.startsWith("*")) {
-      node = document.createElement("em");
-      node.textContent = token.slice(1, -1);
-    } else {
-      const parts = token.match(/^\[([^\]]+)\]\((.+)\)$/);
-      node = document.createElement("a");
-      node.textContent = parts[1];
-      node.href = parts[2];
-      node.rel = "noopener noreferrer";
-      node.target = "_blank";
-    }
-    target.append(node);
-    cursor = match.index + token.length;
-  }
-  target.append(document.createTextNode(source.slice(cursor)));
+async function refreshRenderedPreview() {
+  const content = state.content;
+  if (state.renderedContent === content) return;
+  $("preview").textContent = messages[state.language].rendering;
+  const result = await api("/api/v1/document/render", { name: state.name, content });
+  if (content !== state.content) return;
+  $("preview").innerHTML = result.html;
+  state.renderedContent = content;
 }
 
-function isMarkdownBlockStart(line) {
-  return /^(#{1,6})\s+/.test(line)
-    || /^```/.test(line)
-    || /^>\s?/.test(line)
-    || /^\s*[-*+]\s+/.test(line)
-    || /^\s*\d+\.\s+/.test(line);
+async function setEditorMode(mode) {
+  state.editorMode = mode;
+  document.querySelector(".editor-column").dataset.editorMode = mode;
+  document.querySelectorAll(".mode-surface").forEach((surface) => {
+    surface.classList.toggle("active", surface.id === ({ difference: "syncOutput", source: "editor", render: "preview" })[mode]);
+  });
+  document.querySelectorAll(".editor-mode-switch button").forEach((button) => {
+    const active = button.dataset.editorMode === mode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  const copy = messages[state.language];
+  const titleKey = mode === "difference" ? "differenceMode" : (mode === "render" ? "preview" : "editor");
+  $("editorModeTitle").textContent = copy[titleKey];
+  $("editorModeHint").textContent = copy[`${mode}Hint`];
+  if (mode === "render") await refreshRenderedPreview();
 }
 
-function renderMarkdownPreview(content) {
-  const preview = $("preview");
-  preview.replaceChildren();
-  const lines = content.replace(/\r\n?/g, "\n").split("\n");
-  let index = 0;
-
-  if (lines[0] === "---") {
-    const end = lines.indexOf("---", 1);
-    if (end > 0) {
-      const details = document.createElement("details");
-      details.className = "frontmatter-preview";
-      const summary = document.createElement("summary");
-      summary.textContent = "Document metadata";
-      const source = document.createElement("pre");
-      source.textContent = lines.slice(1, end).join("\n");
-      details.append(summary, source);
-      preview.append(details);
-      index = end + 1;
-    }
-  }
-
-  while (index < lines.length) {
-    const line = lines[index];
-    if (!line.trim()) { index += 1; continue; }
-
-    if (/^```/.test(line)) {
-      const codeLines = [];
-      index += 1;
-      while (index < lines.length && !/^```/.test(lines[index])) {
-        codeLines.push(lines[index]);
-        index += 1;
-      }
-      if (index < lines.length) index += 1;
-      const pre = document.createElement("pre");
-      const code = document.createElement("code");
-      code.textContent = codeLines.join("\n");
-      pre.append(code);
-      preview.append(pre);
-      continue;
-    }
-
-    const heading = line.match(/^(#{1,6})\s+(.+)$/);
-    if (heading) {
-      const node = document.createElement(`h${heading[1].length}`);
-      appendInlineMarkdown(node, heading[2]);
-      preview.append(node);
-      index += 1;
-      continue;
-    }
-
-    const unordered = line.match(/^\s*[-*+]\s+(.+)$/);
-    const ordered = line.match(/^\s*\d+\.\s+(.+)$/);
-    if (unordered || ordered) {
-      const list = document.createElement(unordered ? "ul" : "ol");
-      const matcher = unordered ? /^\s*[-*+]\s+(.+)$/ : /^\s*\d+\.\s+(.+)$/;
-      while (index < lines.length) {
-        const item = lines[index].match(matcher);
-        if (!item) break;
-        const entry = document.createElement("li");
-        appendInlineMarkdown(entry, item[1]);
-        list.append(entry);
-        index += 1;
-      }
-      preview.append(list);
-      continue;
-    }
-
-    if (/^>\s?/.test(line)) {
-      const quote = document.createElement("blockquote");
-      const quoteLines = [];
-      while (index < lines.length && /^>\s?/.test(lines[index])) {
-        quoteLines.push(lines[index].replace(/^>\s?/, ""));
-        index += 1;
-      }
-      appendInlineMarkdown(quote, quoteLines.join(" "));
-      preview.append(quote);
-      continue;
-    }
-
-    const paragraphLines = [line.trim()];
-    index += 1;
-    while (index < lines.length && lines[index].trim() && !isMarkdownBlockStart(lines[index])) {
-      paragraphLines.push(lines[index].trim());
-      index += 1;
-    }
-    const paragraph = document.createElement("p");
-    appendInlineMarkdown(paragraph, paragraphLines.join(" "));
-    preview.append(paragraph);
-  }
-}
-
-function renderSyncOutput(value, kind = "result") {
+function renderSyncOutput(value, kind = "result", activate = false) {
   const output = $("syncOutput");
   output.replaceChildren();
   const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
@@ -268,13 +170,14 @@ function renderSyncOutput(value, kind = "result") {
     row.textContent = line || " ";
     output.append(row);
   }
+  if (activate) setEditorMode("difference");
 }
 
 function renderContent() {
   $("editor").value = state.content;
-  renderMarkdownPreview(state.content);
   $("currentName").textContent = state.name;
   updateDirtyState();
+  if (state.editorMode === "render") handleError(refreshRenderedPreview)();
 }
 
 function setDocument(name, content, saved = true) {
@@ -285,6 +188,7 @@ function setDocument(name, content, saved = true) {
   state.selectedSection = null;
   state.pullPreviewId = null;
   state.pushPreviewId = null;
+  state.renderedContent = null;
   $("catalogList").replaceChildren();
   $("focusReadOutput").textContent = "";
   $("focusEditor").value = "";
@@ -294,6 +198,7 @@ function setDocument(name, content, saved = true) {
   $("pullConfirmButton").disabled = true;
   $("pushConfirmButton").disabled = true;
   renderSyncOutput("");
+  setEditorMode("source");
   updateFocusSelection();
   renderContent();
 }
@@ -403,7 +308,7 @@ async function previewPull() {
   const result = await api("/api/v1/sync/pull/preview", { name: state.name, content: state.content, source });
   state.pullPreviewId = result.preview_id;
   $("pullConfirmButton").disabled = false;
-  renderSyncOutput(result.diff, "diff");
+  renderSyncOutput(result.diff, "diff", true);
   setStatus("Pull preview ready");
 }
 
@@ -422,7 +327,7 @@ async function previewPush() {
   const result = await api("/api/v1/sync/push/preview", { name: state.name, content: state.content });
   state.pushPreviewId = result.preview_id;
   $("pushConfirmButton").disabled = false;
-  renderSyncOutput(result.diff, "diff");
+  renderSyncOutput(result.diff, "diff", true);
   setStatus("Push preview ready");
 }
 
@@ -434,7 +339,7 @@ async function confirmPush() {
   $("pushConfirmButton").disabled = true;
   state.savedContent = state.content;
   updateDirtyState();
-  renderSyncOutput(result.result);
+  renderSyncOutput(result.result, "result", true);
   setStatus("Push complete");
 }
 
@@ -443,7 +348,7 @@ async function uploadDocument() {
     name: state.name, content: state.content, target: $("collectionInput").value.trim(),
   });
   setDocument(state.name, result.content, true);
-  renderSyncOutput(result.result);
+  renderSyncOutput(result.result, "result", true);
   setStatus(result.result.status === "PARTIAL" ? "Upload partially completed" : "Upload complete");
 }
 
@@ -489,6 +394,7 @@ function applyLanguage() {
   updateFocusModeButton();
   renderProviderTokenStatus();
   updateFocusSelection();
+  setEditorMode(state.editorMode);
 }
 
 function handleError(action) {
@@ -500,7 +406,7 @@ function handleError(action) {
 
 $("editor").addEventListener("input", () => {
   state.content = $("editor").value;
-  renderMarkdownPreview(state.content);
+  state.renderedContent = null;
   updateFocusSelection(true);
   state.pullPreviewId = null;
   state.pushPreviewId = null;
@@ -533,16 +439,8 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && document.body.classList.contains("focus-mode")) setFocusMode(false);
 });
 $("languageSelect").addEventListener("change", (event) => { state.language = event.target.value; applyLanguage(); });
-document.querySelectorAll(".mobile-pane-switch button").forEach((button) => {
-  button.addEventListener("click", () => {
-    const pane = button.dataset.mobilePane;
-    document.querySelector(".editor-column").dataset.mobilePane = pane;
-    document.querySelectorAll(".mobile-pane-switch button").forEach((item) => {
-      const active = item === button;
-      item.classList.toggle("active", active);
-      item.setAttribute("aria-pressed", String(active));
-    });
-  });
+document.querySelectorAll(".editor-mode-switch button").forEach((button) => {
+  button.addEventListener("click", handleError(() => setEditorMode(button.dataset.editorMode)));
 });
 $("remoteObjectSelect").addEventListener("change", (event) => {
   const id = event.target.value;

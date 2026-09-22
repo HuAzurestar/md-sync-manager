@@ -22,7 +22,7 @@ class WorkbenchStaticTests(unittest.TestCase):
             "focusReadOutput", "focusEditor", "focusApplyButton", "collectionInput", "remoteInput",
             "remoteListButton", "remoteOpenButton", "pullPreviewButton",
             "pullConfirmButton", "pushPreviewButton", "pushConfirmButton", "uploadButton", "providerSaveButton",
-            "showEditorButton", "showPreviewButton",
+            "editorModeTitle", "editorModeHint", "syncOutput", "dirtyBadge", "statusMessage",
             "providerTokenStatus", "collectionExamples",
         }
 
@@ -31,6 +31,9 @@ class WorkbenchStaticTests(unittest.TestCase):
                 self.assertIn(f'id="{element_id}"', html)
         self.assertIn('data-workbench="single-file"', html)
         self.assertIn('<article id="preview"', html)
+        self.assertIn('data-editor-mode="difference"', html)
+        self.assertIn('data-editor-mode="source"', html)
+        self.assertIn('data-editor-mode="render"', html)
         self.assertIsNone(re.search(r"\breview\b", html, re.IGNORECASE))
         self.assertNotIn("tablist", html)
 
@@ -40,6 +43,7 @@ class WorkbenchStaticTests(unittest.TestCase):
             "/api/v1/document/catalog",
             "/api/v1/document/focus/read",
             "/api/v1/document/focus/apply",
+            "/api/v1/document/render",
             "/api/v1/sync/list",
             "/api/v1/sync/open",
             "/api/v1/sync/pull/preview",
@@ -58,8 +62,10 @@ class WorkbenchStaticTests(unittest.TestCase):
         self.assertNotIn("sessionStorage", script)
         self.assertIn("renderProviderTokenStatus", script)
         self.assertIn("setFocusMode", script)
-        self.assertIn("renderMarkdownPreview", script)
-        self.assertNotIn('$("preview").textContent = state.content', script)
+        self.assertIn("refreshRenderedPreview", script)
+        self.assertIn("setEditorMode", script)
+        self.assertNotIn("appendInlineMarkdown", script)
+        self.assertNotIn("isMarkdownBlockStart", script)
 
     def test_javascript_has_valid_syntax(self):
         node = shutil.which("node")
@@ -86,7 +92,8 @@ class WorkbenchStaticTests(unittest.TestCase):
         self.assertIn("single-file", html.text)
         self.assertIn("refreshCatalog", script.text)
         self.assertIn("@media (max-width: 760px)", styles.text)
-        self.assertIn('data-mobile-pane="preview"', html.text)
+        self.assertIn('data-editor-mode="difference"', html.text)
+        self.assertNotIn("mobile-pane-switch", html.text)
 
 
 if __name__ == "__main__":
