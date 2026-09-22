@@ -9,6 +9,7 @@ from src.api.models import (
     ProviderUpdateRequest,
     PullConfirmRequest,
     PullPreviewRequest,
+    PushConfirmRequest,
     RemoteListRequest,
     RemoteOpenRequest,
     UploadRequest,
@@ -76,6 +77,22 @@ async def confirm_pull(payload: PullConfirmRequest, request: Request):
 @router.post("/sync/push")
 async def push(payload: DocumentRequest, request: Request):
     return success(_sync(request).push(name=payload.name, content=payload.content))
+
+
+@router.post("/sync/push/preview")
+async def preview_push(payload: DocumentRequest, request: Request):
+    return success(_sync(request).preview_push(name=payload.name, content=payload.content))
+
+
+@router.post("/sync/push/confirm")
+async def confirm_push(payload: PushConfirmRequest, request: Request):
+    return success(
+        _sync(request).confirm_push(
+            preview_id=payload.preview_id,
+            name=payload.name,
+            content=payload.content,
+        )
+    )
 
 
 @router.post("/sync/upload")

@@ -40,6 +40,10 @@ class PullConfirmRequest(DocumentRequest):
     preview_id: str
 
 
+class PushConfirmRequest(DocumentRequest):
+    preview_id: str
+
+
 class UploadRequest(DocumentRequest):
     target: str
     parent: str | None = None

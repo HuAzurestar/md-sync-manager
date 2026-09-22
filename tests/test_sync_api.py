@@ -148,6 +148,67 @@ class SyncApiTests(unittest.TestCase):
         self.assertEqual(partial.json()["data"]["document"]["remote"], "github/issues/o/r/42")
         self.assertEqual([call[0] for call in provider.calls], ["push", "upload"])
 
+    def test_push_preview_requires_unchanged_local_and_remote_content(self):
+        original = bound_content("# Local\nPush this body\n")
+        with tempfile.TemporaryDirectory() as directory:
+            client, provider = self.make_client(directory)
+            preview = client.post(
+                "/api/v1/sync/push/preview",
+                json={"name": "doc.md", "content": original},
+            ).json()["data"]
+            changed_local = client.post(
+                "/api/v1/sync/push/confirm",
+                json={
+                    "name": "doc.md",
+                    "content": original + "changed",
+                    "preview_id": preview["preview_id"],
+                },
+            )
+            confirmed = client.post(
+                "/api/v1/sync/push/confirm",
+                json={
+                    "name": "doc.md",
+                    "content": original,
+                    "preview_id": preview["preview_id"],
+                },
+            )
+
+        self.assertTrue(preview["changed"])
+        self.assertIn("--- remote", preview["diff"])
+        self.assertIn("+++ local", preview["diff"])
+        self.assertEqual(changed_local.status_code, 500)
+        self.assertIn("no longer matches", changed_local.json()["error"]["message"])
+        self.assertEqual(confirmed.status_code, 200)
+        self.assertEqual(confirmed.json()["data"]["result"]["direction"], "push")
+        self.assertEqual([call[0] for call in provider.calls], ["pull", "pull", "push"])
+
+    def test_push_confirm_rejects_remote_change_after_preview(self):
+        original = bound_content("# Local\nPush this body\n")
+        with tempfile.TemporaryDirectory() as directory:
+            client, provider = self.make_client(directory)
+            preview = client.post(
+                "/api/v1/sync/push/preview",
+                json={"name": "doc.md", "content": original},
+            ).json()["data"]
+
+            def changed_pull(remote):
+                provider.calls.append(("pull", str(remote)))
+                return RemoteContent("Changed remotely", "# Remote\nNew remote body\n")
+
+            provider.pull = changed_pull
+            rejected = client.post(
+                "/api/v1/sync/push/confirm",
+                json={
+                    "name": "doc.md",
+                    "content": original,
+                    "preview_id": preview["preview_id"],
+                },
+            )
+
+        self.assertEqual(rejected.status_code, 500)
+        self.assertIn("remote document no longer matches", rejected.json()["error"]["message"])
+        self.assertNotIn("push", [call[0] for call in provider.calls])
+
     def test_provider_config_is_public_and_persistent_without_token_echo(self):
         with tempfile.TemporaryDirectory() as directory:
             client, _provider = self.make_client(directory)

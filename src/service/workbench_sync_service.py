@@ -27,11 +27,21 @@ class PullPreview:
     expires_at: float
 
 
+@dataclass(frozen=True)
+class PushPreview:
+    preview_id: str
+    name: str
+    original_content: str
+    remote_content: str
+    remote: str
+    expires_at: float
+
+
 class WorkbenchSyncService:
     def __init__(self, sync_service: SyncService, *, preview_ttl: float = 600.0):
         self.sync_service = sync_service
         self.preview_ttl = preview_ttl
-        self._previews: dict[str, PullPreview] = {}
+        self._previews: dict[str, PullPreview | PushPreview] = {}
 
     def status(self) -> dict[str, object]:
         return {
@@ -170,7 +180,7 @@ class WorkbenchSyncService:
     ) -> dict[str, object]:
         self._expire_previews()
         preview = self._previews.get(preview_id)
-        if preview is None:
+        if not isinstance(preview, PullPreview):
             raise ValueError("pull preview is unknown or expired")
         if preview.name != self._filename(name) or preview.original_content != content:
             raise ValueError("current document no longer matches the pull preview")
@@ -185,6 +195,58 @@ class WorkbenchSyncService:
                 "remote": preview.remote,
             },
         }
+
+    def preview_push(self, *, name: str, content: str) -> dict[str, object]:
+        filename = self._filename(name)
+        remote = self._resolve_remote(filename, content, None, operation="push")
+        parsed, remote_content = self.sync_service.download(remote)
+        current_remote_content = self._remote_document(
+            filename, content, parsed, remote_content.title, remote_content.body
+        )
+        preview_id = secrets.token_urlsafe(18)
+        preview = PushPreview(
+            preview_id,
+            filename,
+            content,
+            current_remote_content,
+            str(parsed),
+            time.monotonic() + self.preview_ttl,
+        )
+        self._previews[preview_id] = preview
+        return {
+            "preview_id": preview_id,
+            "direction": "push",
+            "remote": str(parsed),
+            "changed": current_remote_content != content,
+            "diff": "".join(
+                unified_diff(
+                    current_remote_content.splitlines(keepends=True),
+                    content.splitlines(keepends=True),
+                    fromfile="remote",
+                    tofile="local",
+                )
+            ),
+        }
+
+    def confirm_push(
+        self, *, preview_id: str, name: str, content: str
+    ) -> dict[str, object]:
+        self._expire_previews()
+        preview = self._previews.get(preview_id)
+        if not isinstance(preview, PushPreview):
+            raise ValueError("push preview is unknown or expired")
+        filename = self._filename(name)
+        if preview.name != filename or preview.original_content != content:
+            raise ValueError("current document no longer matches the push preview")
+        parsed, remote_content = self.sync_service.download(preview.remote)
+        current_remote_content = self._remote_document(
+            filename, content, parsed, remote_content.title, remote_content.body
+        )
+        if preview.remote_content != current_remote_content:
+            raise ValueError("remote document no longer matches the push preview")
+        result = self.push(name=filename, content=content)
+        del self._previews[preview_id]
+        return result
 
     def push(self, *, name: str, content: str) -> dict[str, object]:
         filename = self._filename(name)
@@ -224,12 +286,14 @@ class WorkbenchSyncService:
             "result": {**result, "direction": "upload"},
         }
 
-    def _resolve_remote(self, filename: str, content: str, source: str | None) -> str:
+    def _resolve_remote(
+        self, filename: str, content: str, source: str | None, *, operation: str = "pull"
+    ) -> str:
         if source:
             return str(RemotePath.parse(source, require="object"))
         document = parse_text(content, Path(filename))
         if not document.remote:
-            raise ValueError("pull requires a source or existing remote binding")
+            raise ValueError(f"{operation} requires an existing remote binding")
         return str(document.remote)
 
     @staticmethod
