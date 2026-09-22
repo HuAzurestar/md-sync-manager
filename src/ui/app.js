@@ -13,6 +13,7 @@ const state = {
   providerConfig: null,
   editorMode: "source",
   renderedContent: null,
+  status: { key: "ready", args: [], error: false },
 };
 
 const messages = {
@@ -38,6 +39,15 @@ const messages = {
     tokenKeep: "Leave blank to keep the configured token", tokenEnter: "Enter a provider token",
     selectedCount: (count) => `${count} selected`, focusWriteReady: "Edit the exact source below, then write it back safely.",
     focusWriteMultiple: "Multiple sections can be read together; select exactly one and read again to enable writing.",
+    ready: "Ready", catalogStatus: (count) => `Catalog: ${count} headings`, readStatus: (count) => `Read ${count} section(s)`,
+    sectionApplied: "Section applied", remoteObjectsStatus: (count) => `Remote objects: ${count}`,
+    pullPreviewReady: "Pull preview ready", pullApplied: "Pull applied", pushPreviewReady: "Push preview ready", pushComplete: "Push complete",
+    uploadPartial: "Upload partially completed", uploadComplete: "Upload complete", providerSaved: (name) => `${name} configuration saved`,
+    documentChanged: "Document changed; preview the transfer again.", noContentChange: "No content change",
+    fileChanged: (count) => `${count} file${count === 1 ? "" : "s"} changed`, pullTransfer: "Pull · remote → source", pushTransfer: "Push · source → remote",
+    workbenchModeLabel: "Workbench mode", languageLabel: "Language", remoteObjectsLabel: "Remote objects",
+    editorLabel: "Markdown source editor", previewLabel: "Rendered Markdown preview", editorDisplayModeLabel: "Editor display mode",
+    focusEmpty: "Select headings and read to inspect source.", diffEmpty: "Preview a Pull or Push to inspect source changes.",
   },
   zh: {
     discardChanges: "\u653e\u5f03\u672a\u4fdd\u5b58\u7684\u66f4\u6539\u5e76\u6253\u5f00\u53e6\u4e00\u4e2a\u6587\u6863\uff1f",
@@ -61,6 +71,15 @@ const messages = {
     tokenKeep: "留空可保留当前令牌", tokenEnter: "请输入 Provider 令牌",
     selectedCount: (count) => `已选 ${count} 项`, focusWriteReady: "编辑下方精确原文，然后安全写回。",
     focusWriteMultiple: "可以合并读取多个章节；如需写回，请只选一个标题并重新读取。",
+    ready: "就绪", catalogStatus: (count) => `目录：${count} 个标题`, readStatus: (count) => `已读取 ${count} 个章节`,
+    sectionApplied: "章节已写回", remoteObjectsStatus: (count) => `远端对象：${count} 个`,
+    pullPreviewReady: "拉取差异已就绪", pullApplied: "拉取已应用", pushPreviewReady: "推送差异已就绪", pushComplete: "推送完成",
+    uploadPartial: "上传已部分完成", uploadComplete: "上传完成", providerSaved: (name) => `${name} 配置已保存`,
+    documentChanged: "文档已更改；请重新预览传输差异。", noContentChange: "内容无变化",
+    fileChanged: (count) => `${count} 个文件有变化`, pullTransfer: "拉取 · 远端 → 源码", pushTransfer: "推送 · 源码 → 远端",
+    workbenchModeLabel: "工作台模式", languageLabel: "语言", remoteObjectsLabel: "远端对象",
+    editorLabel: "Markdown 源码编辑器", previewLabel: "Markdown 渲染预览", editorDisplayModeLabel: "编辑器显示模式",
+    focusEmpty: "请选择标题并读取，以检查章节原文。", diffEmpty: "请预览拉取或推送操作，以检查源码差异。",
   },
 };
 
@@ -79,8 +98,21 @@ async function api(path, payload = null, method = "POST") {
 }
 
 function setStatus(message, error = false) {
+  state.status = null;
   $("statusMessage").textContent = message;
   $("statusMessage").dataset.error = String(error);
+}
+
+function renderLocalizedStatus() {
+  if (!state.status) return;
+  const value = messages[state.language][state.status.key];
+  $("statusMessage").textContent = typeof value === "function" ? value(...state.status.args) : value;
+  $("statusMessage").dataset.error = String(state.status.error);
+}
+
+function setLocalizedStatus(key, args = [], error = false) {
+  state.status = { key, args, error };
+  renderLocalizedStatus();
 }
 
 function updateDirtyState() {
@@ -111,7 +143,7 @@ function renderProviderTokenStatus() {
 function setFocusMode(active) {
   document.body.classList.toggle("focus-mode", active);
   updateFocusModeButton();
-  setStatus(messages[state.language][active ? "focusEntered" : "focusExited"]);
+  setLocalizedStatus(active ? "focusEntered" : "focusExited");
   if (active) {
     setEditorMode("source");
     $("editor").focus();
@@ -165,8 +197,9 @@ function renderSyncOutput(value, kind = "result", activate = false, direction = 
     const files = window.Diff2Html.parse(text || "");
     const added = files.reduce((total, file) => total + file.addedLines, 0);
     const deleted = files.reduce((total, file) => total + file.deletedLines, 0);
-    const transfer = direction === "pull" ? "Pull · remote → source" : (direction === "push" ? "Push · source → remote" : "");
-    const fileCount = `${files.length} file${files.length === 1 ? "" : "s"} changed`;
+    const copy = messages[state.language];
+    const transfer = direction === "pull" ? copy.pullTransfer : (direction === "push" ? copy.pushTransfer : "");
+    const fileCount = copy.fileChanged(files.length);
     $("diffFiles").textContent = transfer ? `${transfer} · ${fileCount}` : fileCount;
     $("diffAdded").textContent = `+${added}`;
     $("diffDeleted").textContent = `−${deleted}`;
@@ -180,7 +213,7 @@ function renderSyncOutput(value, kind = "result", activate = false, direction = 
         renderNothingWhenEmpty: false,
       });
     } else {
-      viewer.textContent = "No content change";
+      viewer.textContent = copy.noContentChange;
     }
   } else {
     const result = document.createElement("pre");
@@ -266,7 +299,7 @@ async function refreshCatalog() {
   const result = await api("/api/v1/document/catalog", { name: state.name, content: state.content });
   state.catalog = result.entries;
   renderCatalog(result.entries);
-  setStatus(`Catalog: ${result.entries.length} headings`);
+  setLocalizedStatus("catalogStatus", [result.entries.length]);
 }
 
 async function readFocus() {
@@ -277,7 +310,7 @@ async function readFocus() {
   state.selectedSection = result.sections.length === 1 ? result.sections[0] : null;
   $("focusEditor").value = state.selectedSection ? state.selectedSection.source : "";
   updateFocusSelection();
-  setStatus(`Read ${result.sections.length} section(s)`);
+  setLocalizedStatus("readStatus", [result.sections.length]);
 }
 
 async function applyFocus() {
@@ -294,7 +327,7 @@ async function applyFocus() {
   state.selectedSection = result.section;
   renderContent();
   await refreshCatalog();
-  setStatus("Section applied");
+  setLocalizedStatus("sectionApplied");
 }
 
 async function openLocalFile(file) {
@@ -311,7 +344,7 @@ async function listRemote() {
   const select = $("remoteObjectSelect");
   select.replaceChildren(new Option("—", ""));
   result.items.forEach((item) => select.add(new Option(`${item.id} · ${item.title}`, item.id)));
-  setStatus(`Remote objects: ${result.items.length}`);
+  setLocalizedStatus("remoteObjectsStatus", [result.items.length]);
 }
 
 async function openRemote() {
@@ -327,7 +360,7 @@ async function previewPull() {
   state.pullPreviewId = result.preview_id;
   $("pullConfirmButton").disabled = false;
   renderSyncOutput(result.diff, "diff", true, result.direction);
-  setStatus("Pull preview ready");
+  setLocalizedStatus("pullPreviewReady");
 }
 
 async function confirmPull() {
@@ -338,7 +371,7 @@ async function confirmPull() {
   $("pullConfirmButton").disabled = true;
   setDocument(state.name, result.content, true);
   await refreshCatalog();
-  setStatus("Pull applied");
+  setLocalizedStatus("pullApplied");
 }
 
 async function previewPush() {
@@ -346,7 +379,7 @@ async function previewPush() {
   state.pushPreviewId = result.preview_id;
   $("pushConfirmButton").disabled = false;
   renderSyncOutput(result.diff, "diff", true, result.direction);
-  setStatus("Push preview ready");
+  setLocalizedStatus("pushPreviewReady");
 }
 
 async function confirmPush() {
@@ -358,7 +391,7 @@ async function confirmPush() {
   state.savedContent = state.content;
   updateDirtyState();
   renderSyncOutput(result.result, "result", true);
-  setStatus("Push complete");
+  setLocalizedStatus("pushComplete");
 }
 
 async function uploadDocument() {
@@ -367,7 +400,7 @@ async function uploadDocument() {
   });
   setDocument(state.name, result.content, true);
   renderSyncOutput(result.result, "result", true);
-  setStatus(result.result.status === "PARTIAL" ? "Upload partially completed" : "Upload complete");
+  setLocalizedStatus(result.result.status === "PARTIAL" ? "uploadPartial" : "uploadComplete");
 }
 
 async function loadProvider() {
@@ -387,7 +420,7 @@ async function saveProvider() {
   if (tokenInput.value) values.token = tokenInput.value;
   tokenInput.value = "";
   await api("/api/v1/providers", { providers: { [name]: values } }, "PUT");
-  setStatus(`${name} configuration saved`);
+  setLocalizedStatus("providerSaved", [name]);
   await loadProvider();
 }
 
@@ -408,10 +441,16 @@ function applyLanguage() {
   document.querySelectorAll("[data-i18n]").forEach((node) => {
     node.textContent = messages[state.language][node.dataset.i18n] || node.textContent;
   });
+  document.querySelectorAll("[data-i18n-aria-label]").forEach((node) => {
+    node.setAttribute("aria-label", messages[state.language][node.dataset.i18nAriaLabel]);
+  });
+  $("focusReadOutput").dataset.emptyMessage = messages[state.language].focusEmpty;
+  $("diffViewer").dataset.emptyMessage = messages[state.language].diffEmpty;
   updateDirtyState();
   updateFocusModeButton();
   renderProviderTokenStatus();
   updateFocusSelection();
+  renderLocalizedStatus();
   setEditorMode(state.editorMode);
 }
 
@@ -430,9 +469,11 @@ $("editor").addEventListener("input", () => {
   state.pushPreviewId = null;
   $("pullConfirmButton").disabled = true;
   $("pushConfirmButton").disabled = true;
-  renderSyncOutput("Document changed; preview the transfer again.");
+  renderSyncOutput(messages[state.language].documentChanged);
+  setLocalizedStatus("documentChanged");
   updateDirtyState();
 });
+$("openFileButton").addEventListener("click", () => $("fileInput").click());
 $("fileInput").addEventListener("change", handleError(async (event) => {
   await openLocalFile(event.target.files[0]);
   event.target.value = "";

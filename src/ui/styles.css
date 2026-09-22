@@ -61,7 +61,7 @@ textarea { resize: vertical; }
 .catalog-item input { width: auto; margin-top: .2rem; }
 .button-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; }
 .focus-output { min-height: 5rem; max-height: 12rem; margin: 0; overflow: auto; padding: .65rem; border-radius: .55rem; background: var(--source); border: 1px solid var(--line); white-space: pre-wrap; }
-.focus-output:empty::before { content: "Select headings and read to inspect source."; color: var(--muted); }
+.focus-output:empty::before { content: attr(data-empty-message); color: var(--muted); }
 .transfer-section { gap: .8rem; }
 .transfer-row { display: grid; grid-template-columns: minmax(7rem, 1fr) minmax(11rem, 1.4fr); align-items: center; gap: .65rem; padding-top: .7rem; border-top: 1px solid var(--line); }
 .transfer-row > div:first-child { display: grid; gap: .15rem; }
@@ -94,10 +94,11 @@ summary { cursor: pointer; font-weight: 600; }
 .diff-stat-added { color: #167c3a; }
 .diff-stat-deleted { color: #c62828; }
 .diff-viewer { min-width: 0; padding: .75rem; }
-.diff-viewer:empty::before { content: "Preview a Pull or Push to inspect source changes."; color: var(--muted); }
+.diff-viewer:empty::before { content: attr(data-empty-message); color: var(--muted); }
 .diff-viewer .d2h-wrapper { text-align: left; }
 .diff-viewer .d2h-file-wrapper { margin-bottom: 0; border-color: var(--line); }
 .diff-viewer .d2h-file-header { height: auto; padding: .55rem .7rem; background: #f6f8fa; }
+.diff-viewer .d2h-code-line, .diff-viewer .d2h-code-side-line { box-sizing: content-box; }
 .diff-viewer .d2h-code-line-ctn { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 .transfer-result { min-height: 100%; margin: 0; padding: 1rem; background: #0f172a; color: #dbeafe; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
 .editor-mode-switch { display: flex; gap: .4rem; justify-content: flex-start; }
@@ -123,10 +124,13 @@ body.focus-mode .workspace, body.focus-mode .editor-column { display: block; }
 body.focus-mode #editor { min-height: calc(100vh - 12rem); }
 .workspace.dragging { outline: 3px dashed var(--accent); outline-offset: -8px; }
 
-@media (max-width: 760px) {
-  .app-header { align-items: flex-start; flex-direction: column; }
+@media (max-width: 1100px) {
   .workspace { grid-template-columns: 1fr; }
   .control-column { border-right: 0; border-bottom: 1px solid var(--line); }
+}
+
+@media (max-width: 760px) {
+  .app-header { align-items: flex-start; flex-direction: column; }
   .workbench-heading { flex-direction: column; }
   .document-state { justify-content: flex-start; flex-wrap: wrap; }
   #editor, #preview { min-height: 20rem; }

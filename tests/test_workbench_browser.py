@@ -127,6 +127,48 @@ class WorkbenchBrowserTests(unittest.TestCase):
         self.assertEqual(download.suggested_filename, "untitled.md")
         self.assertEqual(Path(download.path()).read_bytes(), content.encode("utf-8"))
 
+    def test_open_file_keyboard_access_and_chinese_accessible_copy(self):
+        self.page.locator("body").click(position={"x": 1, "y": 1})
+        self.page.keyboard.press("Tab")
+        self.assertEqual(self.page.evaluate("document.activeElement.id"), "openFileButton")
+
+        with self.page.expect_file_chooser() as chooser_info:
+            self.page.keyboard.press("Enter")
+        chooser_info.value.set_files(
+            {
+                "name": "keyboard.md",
+                "mimeType": "text/markdown",
+                "buffer": b"# Keyboard\n",
+            }
+        )
+        self.page.locator("#currentName").filter(has_text="keyboard.md").wait_for()
+
+        self.page.locator("#languageSelect").select_option("zh")
+        self.assertEqual(self.page.locator("html").get_attribute("lang"), "zh")
+        self.assertEqual(self.page.locator(".mode-nav").get_attribute("aria-label"), "工作台模式")
+        self.assertEqual(self.page.locator("#editor").get_attribute("aria-label"), "Markdown 源码编辑器")
+        self.assertEqual(self.page.locator("#statusMessage").inner_text(), "目录：1 个标题")
+
+    def test_responsive_layout_and_narrow_diff_remain_readable(self):
+        for width in (390, 768, 820, 1024, 1101, 1440):
+            with self.subTest(width=width):
+                self.page.set_viewport_size({"width": width, "height": 900})
+                page_width = self.page.evaluate("document.documentElement.scrollWidth")
+                self.assertLessEqual(page_width, width)
+
+        long_line = "old line with a somewhat long sentence for narrow screens"
+        diff = (
+            "--- a/doc.md\n+++ b/doc.md\n@@ -1,2 +1,2 @@\n"
+            f"-{long_line}\n+new line with a somewhat long sentence for narrow screens\n"
+        )
+        self.page.set_viewport_size({"width": 390, "height": 844})
+        self.page.evaluate("([value]) => renderSyncOutput(value, 'diff', true, 'pull')", [diff])
+        changed_line = self.page.locator(".d2h-code-line-ctn").first
+        box = changed_line.bounding_box()
+        self.assertIsNotNone(box)
+        self.assertGreater(box["width"], 40)
+        self.assertLess(box["height"], 180)
+
     def test_focus_apply_failure_feedback_and_narrow_pane_switch(self):
         self.page.locator("#editor").fill(
             "# Root\nintro\n## One\nold\n## Two\nlast\n"

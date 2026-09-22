@@ -14,17 +14,17 @@
         <h1 data-i18n="title">Markdown Focus Workbench</h1>
       </div>
       <div class="header-actions">
-        <label class="button" for="fileInput" data-i18n="openFile">Open file</label>
+        <button id="openFileButton" type="button" data-i18n="openFile">Open file</button>
         <input id="fileInput" type="file" accept=".md,text/markdown" hidden>
         <button id="focusModeButton" type="button" aria-pressed="false" data-i18n="immersiveMode">Immersive editing</button>
-        <select id="languageSelect" aria-label="Language">
+        <select id="languageSelect" aria-label="Language" data-i18n-aria-label="languageLabel">
           <option value="en">English</option>
           <option value="zh">中文</option>
         </select>
       </div>
     </header>
 
-    <nav class="mode-nav" aria-label="Workbench mode">
+    <nav class="mode-nav" aria-label="Workbench mode" data-i18n-aria-label="workbenchModeLabel">
       <button class="mode-button active" type="button" data-panel="documentPanel" data-i18n="documentMode">Document / Focus</button>
       <button class="mode-button" type="button" data-panel="syncPanel" data-i18n="syncMode">Sync</button>
     </nav>
@@ -54,7 +54,7 @@
             </div>
             <p class="hint" data-i18n="focusReadHint">Select one or more headings, then read their exact source.</p>
             <button id="focusReadButton" type="button" disabled data-i18n="readSelection">Read selected sections</button>
-            <pre id="focusReadOutput" class="focus-output" aria-live="polite"></pre>
+            <pre id="focusReadOutput" class="focus-output" aria-live="polite" data-empty-message="Select headings and read to inspect source."></pre>
           </div>
 
           <div class="tool-section">
@@ -82,7 +82,7 @@
             </datalist>
             <p class="hint" data-i18n="collectionHint">Use a complete collection path, for example youtrack/issues/DEMO.</p>
             <button id="remoteListButton" type="button" data-i18n="listRemote">List remote</button>
-            <select id="remoteObjectSelect" aria-label="Remote objects">
+            <select id="remoteObjectSelect" aria-label="Remote objects" data-i18n-aria-label="remoteObjectsLabel">
               <option value="">—</option>
             </select>
             <label for="remoteInput" data-i18n="remoteObject">Remote object</label>
@@ -148,18 +148,18 @@
           </div>
         </div>
         <div class="editor-surface">
-          <textarea id="editor" class="mode-surface active" spellcheck="false" aria-label="Markdown source editor"></textarea>
+          <textarea id="editor" class="mode-surface active" spellcheck="false" aria-label="Markdown source editor" data-i18n-aria-label="editorLabel"></textarea>
           <div id="syncOutput" class="mode-surface diff-surface" aria-live="polite">
             <div id="diffStats" class="diff-stats" hidden>
               <span id="diffFiles" class="diff-stat-files"></span>
               <span id="diffAdded" class="diff-stat-added"></span>
               <span id="diffDeleted" class="diff-stat-deleted"></span>
             </div>
-            <div id="diffViewer" class="diff-viewer"></div>
+            <div id="diffViewer" class="diff-viewer" data-empty-message="Preview a Pull or Push to inspect source changes."></div>
           </div>
-          <article id="preview" class="mode-surface markdown-preview" tabindex="0" aria-label="Rendered Markdown preview"></article>
+          <article id="preview" class="mode-surface markdown-preview" tabindex="0" aria-label="Rendered Markdown preview" data-i18n-aria-label="previewLabel"></article>
         </div>
-        <div class="editor-mode-switch" role="group" aria-label="Editor display mode">
+        <div class="editor-mode-switch" role="group" aria-label="Editor display mode" data-i18n-aria-label="editorDisplayModeLabel">
           <button type="button" data-editor-mode="difference" aria-pressed="false" data-i18n="differenceMode">Difference</button>
           <button class="active" type="button" data-editor-mode="source" aria-pressed="true" data-i18n="sourceMode">Markdown source</button>
           <button type="button" data-editor-mode="render" aria-pressed="false" data-i18n="renderMode">Render</button>

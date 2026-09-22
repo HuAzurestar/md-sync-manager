@@ -29,7 +29,7 @@ class WorkbenchStaticTests(unittest.TestCase):
     def test_single_file_shell_contains_confirmed_controls_only(self):
         html = (UI / "index.html").read_text(encoding="utf-8")
         required_ids = {
-            "fileInput", "editor", "preview", "catalogList", "focusReadButton",
+            "openFileButton", "fileInput", "editor", "preview", "catalogList", "focusReadButton",
             "focusReadOutput", "focusEditor", "focusApplyButton", "collectionInput", "remoteInput",
             "remoteListButton", "remoteOpenButton", "pullPreviewButton",
             "pullConfirmButton", "pushPreviewButton", "pushConfirmButton", "uploadButton", "providerSaveButton",
@@ -111,6 +111,7 @@ class WorkbenchStaticTests(unittest.TestCase):
         self.assertEqual(diff_styles.status_code, 200)
         self.assertIn("single-file", html.text)
         self.assertIn("refreshCatalog", script.text)
+        self.assertIn("@media (max-width: 1100px)", styles.text)
         self.assertIn("@media (max-width: 760px)", styles.text)
         self.assertIn('data-editor-mode="difference"', html.text)
         self.assertNotIn("mobile-pane-switch", html.text)
