@@ -396,7 +396,17 @@ class WorkbenchBrowserTests(unittest.TestCase):
         self.page.wait_for_function(
             "document.querySelector('#editor').value.includes('pulled')"
         )
+        self.assertIn("remote update", self.page.locator("#syncOutput").inner_text())
+        self.assertEqual(
+            self.page.locator(".editor-column").get_attribute("data-editor-mode"),
+            "difference",
+        )
+        self.assertEqual(
+            self.page.locator("#diffFiles").inner_text(),
+            "Pull · remote → source · 1 file changed",
+        )
 
+        self.page.locator('[data-editor-mode="source"]').click()
         self.page.locator("#editor").fill("# Remote\npush me\n")
         self.page.locator("#pushPreviewButton").click()
         self.page.wait_for_function(
@@ -412,6 +422,11 @@ class WorkbenchBrowserTests(unittest.TestCase):
         self.page.locator("#pushConfirmButton").click()
         self.page.wait_for_function(
             "document.querySelector('#statusMessage').textContent === 'Push complete'"
+        )
+        self.assertIn("push me", self.page.locator("#syncOutput").inner_text())
+        self.assertEqual(
+            self.page.locator("#diffFiles").inner_text(),
+            "Push · source → remote · 1 file changed",
         )
         self.page.locator("#uploadButton").click()
         self.page.wait_for_function(

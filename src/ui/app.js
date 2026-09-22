@@ -9,6 +9,7 @@ const state = {
   selectedSection: null,
   pullPreviewId: null,
   pushPreviewId: null,
+  transferPreview: null,
   language: "en",
   providerConfig: null,
   editorMode: "source",
@@ -266,6 +267,16 @@ function renderSyncOutput(value, kind = "result", activate = false, direction = 
   if (activate) setEditorMode("difference");
 }
 
+function renderTransferPreview() {
+  if (!state.transferPreview) return;
+  renderSyncOutput(
+    state.transferPreview.diff,
+    "diff",
+    true,
+    state.transferPreview.direction,
+  );
+}
+
 function renderContent() {
   $("editor").value = state.content;
   $("currentName").textContent = state.name;
@@ -273,7 +284,7 @@ function renderContent() {
   if (state.editorMode === "render") handleError(refreshRenderedPreview)();
 }
 
-function setDocument(name, content, saved = true) {
+function setDocument(name, content, saved = true, preserveTransferPreview = false) {
   state.name = name || "untitled.md";
   state.content = content;
   if (saved) state.savedContent = content;
@@ -281,6 +292,7 @@ function setDocument(name, content, saved = true) {
   state.selectedSection = null;
   state.pullPreviewId = null;
   state.pushPreviewId = null;
+  if (!preserveTransferPreview) state.transferPreview = null;
   state.renderedContent = null;
   $("catalogList").replaceChildren();
   $("focusReadOutput").textContent = "";
@@ -290,8 +302,10 @@ function setDocument(name, content, saved = true) {
   $("focusReadButton").disabled = true;
   $("pullConfirmButton").disabled = true;
   $("pushConfirmButton").disabled = true;
-  renderSyncOutput("");
-  setEditorMode("source");
+  if (!preserveTransferPreview) {
+    renderSyncOutput("");
+    setEditorMode("source");
+  }
   updateFocusSelection();
   renderContent();
 }
@@ -400,8 +414,9 @@ async function previewPull() {
   const source = $("remoteInput").value.trim() || null;
   const result = await api("/api/v1/sync/pull/preview", { name: state.name, content: state.content, source });
   state.pullPreviewId = result.preview_id;
+  state.transferPreview = { diff: result.diff, direction: result.direction };
   $("pullConfirmButton").disabled = false;
-  renderSyncOutput(result.diff, "diff", true, result.direction);
+  renderTransferPreview();
   setLocalizedStatus("pullPreviewReady");
 }
 
@@ -411,28 +426,30 @@ async function confirmPull() {
   });
   state.pullPreviewId = null;
   $("pullConfirmButton").disabled = true;
-  setDocument(state.name, result.content, true);
+  setDocument(state.name, result.content, true, true);
   await refreshCatalog();
+  renderTransferPreview();
   setLocalizedStatus("pullApplied");
 }
 
 async function previewPush() {
   const result = await api("/api/v1/sync/push/preview", { name: state.name, content: state.content });
   state.pushPreviewId = result.preview_id;
+  state.transferPreview = { diff: result.diff, direction: result.direction };
   $("pushConfirmButton").disabled = false;
-  renderSyncOutput(result.diff, "diff", true, result.direction);
+  renderTransferPreview();
   setLocalizedStatus("pushPreviewReady");
 }
 
 async function confirmPush() {
-  const result = await api("/api/v1/sync/push/confirm", {
+  await api("/api/v1/sync/push/confirm", {
     name: state.name, content: state.content, preview_id: state.pushPreviewId,
   });
   state.pushPreviewId = null;
   $("pushConfirmButton").disabled = true;
   state.savedContent = state.content;
   updateDirtyState();
-  renderSyncOutput(result.result, "result", true);
+  renderTransferPreview();
   setLocalizedStatus("pushComplete");
 }
 
@@ -516,6 +533,7 @@ $("editor").addEventListener("input", () => {
   updateFocusSelection(true);
   state.pullPreviewId = null;
   state.pushPreviewId = null;
+  state.transferPreview = null;
   $("pullConfirmButton").disabled = true;
   $("pushConfirmButton").disabled = true;
   renderSyncOutput(messages[state.language].documentChanged);
