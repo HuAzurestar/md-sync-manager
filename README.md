@@ -16,12 +16,12 @@ Open <http://127.0.0.1:8000>. The server listens on loopback by default. `SMMD_C
 
 The Workbench keeps one document open at a time:
 
-1. Open or drag a `.md` file, then edit it beside the plain-text preview.
-2. Refresh the catalog. Select several headings to read them in source order, or select exactly one to edit and apply that retained range.
-3. Use **Download** to save a browser-edited copy. Unsaved content is guarded before another local or remote document replaces it.
-4. In **Sync**, list a collection, open an object, preview and confirm a pull, push the bound object, or upload a new object.
+1. Open or drag a `.md` file, then edit its source beside the rendered Markdown preview.
+2. In **Document / Sections**, use the three explicit steps: refresh the catalog, read one or more selected headings, then write back exactly one selected section.
+3. In **Sync**, use **Remote list** to browse and open objects. Use **Transfer** for the grouped Pull, Push, Download, and Upload/New operations.
+4. Preview the diff before confirming either a pull or a push. Download saves a browser-edited copy, while Upload/New creates a remote object.
 
-On narrow screens, use the Editor/Preview switch. Pull is always a preview-plus-confirm operation. Focus apply rejects stale source and leaves the document unchanged.
+On narrow screens, use the Editor/Preview switch. Pull and push are always preview-plus-confirm operations. Focus apply rejects stale source and leaves the document unchanged.
 
 ## Docker
 
@@ -123,7 +123,7 @@ python -m src.controller.main focus-apply C:\docs\local.md --selector "## Alpha"
 Safety rules:
 
 - `pull` reads one remote and overwrites only local title/body. The Workbench API requires preview and explicit confirmation before applying it.
-- `push` requires `remote`, updates only title/body, and never creates an object.
+- `push` requires `remote`, updates only title/body, and never creates an object. The Workbench API requires preview and explicit confirmation before applying it.
 - `upload` requires no `remote` and an explicit collection target; it creates and binds one object.
 - A partial multi-step provider result is reported explicitly instead of being presented as full success.
 - Until stable error classes are introduced, API validation and provider failures return HTTP 500 with a readable error envelope.
