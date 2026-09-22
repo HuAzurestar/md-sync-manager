@@ -7,6 +7,7 @@ import re
 
 ATX_HEADING = re.compile(r"^( {0,3})(#{1,6})(?:[ \t]+(.*?)|[ \t]*)$")
 FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+FENCE_CLOSE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
 
 
 @dataclass(frozen=True)
@@ -44,19 +45,17 @@ def catalog_text(text: str, *, path: str = "<memory>") -> DocumentCatalog:
     fence_char: str | None = None
     fence_length = 0
     lines = text.splitlines(keepends=True)
+    front_matter_end = _front_matter_end(lines)
 
     for line_number, line_with_ending in enumerate(lines, start=1):
+        if line_number <= front_matter_end:
+            continue
         line = line_with_ending.rstrip("\r\n")
         if fence_char is not None:
-            stripped = line.lstrip(" ")
-            indent = len(line) - len(stripped)
-            if indent <= 3:
-                marker = stripped.split(maxsplit=1)[0] if stripped else ""
-                if (
-                    marker
-                    and set(marker) == {fence_char}
-                    and len(marker) >= fence_length
-                ):
+            closing = FENCE_CLOSE.match(line)
+            if closing:
+                marker = closing.group(1)
+                if marker[0] == fence_char and len(marker) >= fence_length:
                     fence_char = None
                     fence_length = 0
             continue
@@ -64,6 +63,8 @@ def catalog_text(text: str, *, path: str = "<memory>") -> DocumentCatalog:
         opening = FENCE_OPEN.match(line)
         if opening:
             marker = opening.group(1)
+            if marker[0] == "`" and "`" in opening.group(2):
+                continue
             fence_char = marker[0]
             fence_length = len(marker)
             continue
@@ -91,6 +92,15 @@ def catalog_text(text: str, *, path: str = "<memory>") -> DocumentCatalog:
     )
 
 
+def _front_matter_end(lines: list[str]) -> int:
+    if not lines or lines[0].rstrip("\r\n") != "---":
+        return 0
+    for line_number, line in enumerate(lines[1:], start=2):
+        if line.rstrip("\r\n") in {"---", "..."}:
+            return line_number
+    return 0
+
+
 def catalog_file(path: Path) -> DocumentCatalog:
     if not path.exists():
         raise FileNotFoundError(f"Markdown file not found: {path}")
@@ -98,7 +108,8 @@ def catalog_file(path: Path) -> DocumentCatalog:
         raise ValueError(f"Markdown path is not a file: {path}")
     if path.suffix.casefold() != ".md":
         raise ValueError(f"only .md files are supported: {path}")
-    return catalog_text(path.read_text(encoding="utf-8"), path=str(path))
+    with path.open("r", encoding="utf-8", newline="") as stream:
+        return catalog_text(stream.read(), path=str(path))
 
 
 def format_catalog(catalog: DocumentCatalog) -> str:

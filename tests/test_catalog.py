@@ -53,6 +53,37 @@ class CatalogTests(unittest.TestCase):
         )
         self.assertEqual([entry.text for entry in catalog.entries], ["Root", "Same", "Same"])
 
+    def test_front_matter_is_not_cataloged(self):
+        source = """---
+# YAML comment
+title: Example
+literal: |
+  # YAML scalar
+...
+# Document
+"""
+
+        catalog = catalog_text(source)
+
+        self.assertEqual([entry.heading for entry in catalog.entries], ["# Document"])
+        self.assertEqual(catalog.entries[0].line, 7)
+
+    def test_fence_with_trailing_text_does_not_close(self):
+        source = """# Root
+```text
+# hidden
+``` trailing text
+## still hidden
+```
+## Visible
+"""
+
+        catalog = catalog_text(source)
+
+        self.assertEqual(
+            [entry.heading for entry in catalog.entries], ["# Root", "## Visible"]
+        )
+
     def test_format_numbers_are_display_only(self):
         catalog = catalog_text("# Root\n## Child\n")
 

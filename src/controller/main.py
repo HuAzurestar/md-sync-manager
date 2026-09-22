@@ -8,7 +8,7 @@ from pathlib import Path
 from src.controller.sync_controller import SyncController
 from src.core.catalog import catalog_file, format_catalog
 from src.core.config import load_config
-from src.core.focus import focus_apply_file, focus_read_file
+from src.core.focus import focus_apply_file, focus_read_file, read_text_exact
 from src.core.logging import get_logger
 
 
@@ -113,8 +113,8 @@ def main() -> None:
         section = focus_apply_file(
             args.file,
             selector=args.selector,
-            expected_source=args.expected_file.read_text(encoding="utf-8"),
-            replacement=args.replacement_file.read_text(encoding="utf-8"),
+            expected_source=read_text_exact(args.expected_file),
+            replacement=read_text_exact(args.replacement_file),
         )
         print(json.dumps({"status": "SUCCESS", "previous": section.as_dict()}))
         return

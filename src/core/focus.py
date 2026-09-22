@@ -84,14 +84,14 @@ def focus_apply_text(
 
 def focus_read_file(path: Path, selectors: list[str]) -> tuple[FocusSection, ...]:
     _validate_markdown_file(path)
-    return focus_read_text(path.read_text(encoding="utf-8"), selectors)
+    return focus_read_text(read_text_exact(path), selectors)
 
 
 def focus_apply_file(
     path: Path, *, selector: str, expected_source: str, replacement: str
 ) -> FocusSection:
     _validate_markdown_file(path)
-    original = path.read_text(encoding="utf-8")
+    original = read_text_exact(path)
     updated, previous = focus_apply_text(
         original,
         selector=selector,
@@ -113,6 +113,11 @@ def focus_apply_file(
         temporary.unlink(missing_ok=True)
         raise
     return previous
+
+
+def read_text_exact(path: Path) -> str:
+    with path.open("r", encoding="utf-8", newline="") as stream:
+        return stream.read()
 
 
 def _validate_markdown_file(path: Path) -> None:

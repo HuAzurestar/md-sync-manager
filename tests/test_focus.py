@@ -13,6 +13,7 @@ from src.core.focus import (
     FocusSelectionError,
     focus_apply_file,
     focus_apply_text,
+    focus_read_file,
     focus_read_text,
 )
 from src.service.sync_service import SyncService
@@ -105,6 +106,27 @@ class FocusTests(unittest.TestCase):
             )
             self.assertIn("## Tail\nnew tail\n", path.read_text(encoding="utf-8"))
             self.assertEqual(list(path.parent.glob(f".{path.name}.*.tmp")), [])
+
+    def test_file_focus_preserves_crlf_outside_replaced_section(self):
+        source = b"# Root\r\nintro\r\n## Target\r\nold\r\n## Tail\r\nkeep\r\n"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "crlf.md"
+            path.write_bytes(source)
+
+            section = focus_read_file(path, ["## Target"])[0]
+            self.assertEqual(section.source, "## Target\r\nold\r\n")
+
+            focus_apply_file(
+                path,
+                selector="## Target",
+                expected_source=section.source,
+                replacement="## Target\r\nnew\r\n",
+            )
+
+            self.assertEqual(
+                path.read_bytes(),
+                b"# Root\r\nintro\r\n## Target\r\nnew\r\n## Tail\r\nkeep\r\n",
+            )
 
     def test_focus_api_returns_ranges_and_updated_content_without_sha(self):
         client = TestClient(create_app(sync_service=SyncService()), raise_server_exceptions=False)
