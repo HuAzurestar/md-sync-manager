@@ -254,6 +254,78 @@ class WorkbenchBrowserTests(unittest.TestCase):
         )
         self.assertNotIn("browser-only-secret", response_text)
 
+    def test_editor_is_locked_while_push_confirmation_is_in_flight(self):
+        self.page.locator('[data-panel="syncPanel"]').click()
+        self.page.evaluate(
+            """() => {
+              const originalFetch = window.fetch;
+              window.fetch = (input, options) => {
+                if (String(input).endsWith('/api/v1/sync/push/confirm')) {
+                  return new Promise((resolve) => {
+                    window.__resolvePush = () => resolve(new Response(JSON.stringify({
+                      status: 'success', data: {result: {status: 'success'}}, error: null
+                    }), {status: 200, headers: {'Content-Type': 'application/json'}}));
+                  });
+                }
+                return originalFetch(input, options);
+              };
+              state.pushPreviewId = 'pending-preview';
+              document.querySelector('#pushConfirmButton').disabled = false;
+            }"""
+        )
+
+        self.page.locator("#pushConfirmButton").click()
+        self.page.wait_for_function("Boolean(window.__resolvePush)")
+
+        self.assertEqual(self.page.locator("#dropZone").get_attribute("aria-busy"), "true")
+        self.assertFalse(self.page.locator("#editor").is_editable())
+        self.assertTrue(self.page.locator("#openFileButton").is_disabled())
+
+        self.page.evaluate("window.__resolvePush()")
+        self.page.wait_for_function(
+            "document.querySelector('#dropZone').getAttribute('aria-busy') === 'false'"
+        )
+        self.assertTrue(self.page.locator("#editor").is_editable())
+        self.assertFalse(self.page.locator("#openFileButton").is_disabled())
+
+    def test_upload_sends_branch_fields_only_for_github_or_gitee_pulls(self):
+        payloads = []
+
+        def fulfill_upload(route):
+            payloads.append(route.request.post_data_json)
+            route.fulfill(
+                json={
+                    "status": "success",
+                    "data": {
+                        "name": "untitled.md",
+                        "content": "# Uploaded\n",
+                        "result": {"status": "success"},
+                    },
+                    "error": None,
+                }
+            )
+
+        self.page.route("**/api/v1/sync/upload", fulfill_upload)
+        self.page.locator('[data-panel="syncPanel"]').click()
+        collection = self.page.locator("#collectionInput")
+
+        collection.fill("github/pulls/owner/repo")
+        self.assertTrue(self.page.locator("#pullRequestFields").is_visible())
+        self.page.locator("#baseInput").fill("main")
+        self.page.locator("#headInput").fill("feature/topic")
+        self.page.locator("#uploadButton").click()
+        self.page.wait_for_function("document.querySelector('#editor').value === '# Uploaded\\n'")
+
+        collection.fill("github/issues/owner/repo")
+        self.assertTrue(self.page.locator("#pullRequestFields").is_hidden())
+        self.page.locator("#uploadButton").click()
+        self.page.wait_for_function("document.querySelector('#dropZone').getAttribute('aria-busy') === 'false'")
+
+        self.assertEqual(payloads[0]["base"], "main")
+        self.assertEqual(payloads[0]["head"], "feature/topic")
+        self.assertNotIn("base", payloads[1])
+        self.assertNotIn("head", payloads[1])
+
     def test_remote_list_open_pull_push_and_upload_controls(self):
         def fulfill(route):
             path = route.request.url.split("?", 1)[0]

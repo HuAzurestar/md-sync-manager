@@ -13,6 +13,7 @@ const state = {
   providerConfig: null,
   editorMode: "source",
   renderedContent: null,
+  locked: false,
   status: { key: "ready", args: [], error: false },
 };
 
@@ -48,6 +49,9 @@ const messages = {
     workbenchModeLabel: "Workbench mode", languageLabel: "Language", remoteObjectsLabel: "Remote objects",
     editorLabel: "Markdown source editor", previewLabel: "Rendered Markdown preview", editorDisplayModeLabel: "Editor display mode",
     focusEmpty: "Select headings and read to inspect source.", diffEmpty: "Preview a Pull or Push to inspect source changes.",
+    baseBranch: "Base branch", headBranch: "Head branch", pullRequestBranches: "Pull Request branches",
+    pullRequestBranchesHint: "Required only when creating a GitHub or Gitee Pull Request.",
+    pullRequestBranchesRequired: "Base and head branches are required for Pull Request uploads.",
   },
   zh: {
     discardChanges: "\u653e\u5f03\u672a\u4fdd\u5b58\u7684\u66f4\u6539\u5e76\u6253\u5f00\u53e6\u4e00\u4e2a\u6587\u6863\uff1f",
@@ -80,6 +84,9 @@ const messages = {
     workbenchModeLabel: "工作台模式", languageLabel: "语言", remoteObjectsLabel: "远端对象",
     editorLabel: "Markdown 源码编辑器", previewLabel: "Markdown 渲染预览", editorDisplayModeLabel: "编辑器显示模式",
     focusEmpty: "请选择标题并读取，以检查章节原文。", diffEmpty: "请预览拉取或推送操作，以检查源码差异。",
+    baseBranch: "目标分支", headBranch: "来源分支", pullRequestBranches: "Pull Request 分支",
+    pullRequestBranchesHint: "仅在新建 GitHub 或 Gitee Pull Request 时必填。",
+    pullRequestBranchesRequired: "新建 Pull Request 时必须填写目标分支和来源分支。",
   },
 };
 
@@ -156,6 +163,41 @@ function hasUnsavedChanges() {
 
 function confirmDiscard() {
   return !hasUnsavedChanges() || window.confirm(messages[state.language].discardChanges);
+}
+
+function setWorkbenchLocked(locked) {
+  state.locked = locked;
+  const workspace = $("dropZone");
+  workspace.inert = locked;
+  workspace.setAttribute("aria-busy", String(locked));
+  $("editor").readOnly = locked;
+  $("focusEditor").readOnly = locked;
+  $("openFileButton").disabled = locked;
+  $("fileInput").disabled = locked;
+  $("focusModeButton").disabled = locked;
+}
+
+function withWorkbenchLock(action) {
+  return async (...args) => {
+    if (state.locked) return;
+    setWorkbenchLocked(true);
+    try { return await action(...args); }
+    finally { setWorkbenchLocked(false); }
+  };
+}
+
+function isPullRequestCollection(target) {
+  const parts = target.trim().replace(/^\/+|\/+$/g, "").split("/");
+  return parts.length === 4
+    && ["github", "gitee"].includes(parts[0].toLowerCase())
+    && parts[1].toLowerCase() === "pulls";
+}
+
+function updatePullRequestFields() {
+  const visible = isPullRequestCollection($("collectionInput").value);
+  $("pullRequestFields").hidden = !visible;
+  $("baseInput").required = visible;
+  $("headInput").required = visible;
 }
 
 async function refreshRenderedPreview() {
@@ -395,9 +437,16 @@ async function confirmPush() {
 }
 
 async function uploadDocument() {
-  const result = await api("/api/v1/sync/upload", {
-    name: state.name, content: state.content, target: $("collectionInput").value.trim(),
-  });
+  const target = $("collectionInput").value.trim();
+  const payload = { name: state.name, content: state.content, target };
+  if (isPullRequestCollection(target)) {
+    const base = $("baseInput").value.trim();
+    const head = $("headInput").value.trim();
+    if (!base || !head) throw new Error(messages[state.language].pullRequestBranchesRequired);
+    payload.base = base;
+    payload.head = head;
+  }
+  const result = await api("/api/v1/sync/upload", payload);
   setDocument(state.name, result.content, true);
   renderSyncOutput(result.result, "result", true);
   setLocalizedStatus(result.result.status === "PARTIAL" ? "uploadPartial" : "uploadComplete");
@@ -473,23 +522,23 @@ $("editor").addEventListener("input", () => {
   setLocalizedStatus("documentChanged");
   updateDirtyState();
 });
-$("openFileButton").addEventListener("click", () => $("fileInput").click());
-$("fileInput").addEventListener("change", handleError(async (event) => {
+$("openFileButton").addEventListener("click", () => { if (!state.locked) $("fileInput").click(); });
+$("fileInput").addEventListener("change", handleError(withWorkbenchLock(async (event) => {
   await openLocalFile(event.target.files[0]);
   event.target.value = "";
-}));
-$("catalogButton").addEventListener("click", handleError(refreshCatalog));
-$("focusReadButton").addEventListener("click", handleError(readFocus));
-$("focusApplyButton").addEventListener("click", handleError(applyFocus));
-$("remoteListButton").addEventListener("click", handleError(listRemote));
-$("remoteOpenButton").addEventListener("click", handleError(openRemote));
-$("pullPreviewButton").addEventListener("click", handleError(previewPull));
-$("pullConfirmButton").addEventListener("click", handleError(confirmPull));
-$("pushPreviewButton").addEventListener("click", handleError(previewPush));
-$("pushConfirmButton").addEventListener("click", handleError(confirmPush));
-$("uploadButton").addEventListener("click", handleError(uploadDocument));
-$("providerSelect").addEventListener("change", handleError(loadProvider));
-$("providerSaveButton").addEventListener("click", handleError(saveProvider));
+})));
+$("catalogButton").addEventListener("click", handleError(withWorkbenchLock(refreshCatalog)));
+$("focusReadButton").addEventListener("click", handleError(withWorkbenchLock(readFocus)));
+$("focusApplyButton").addEventListener("click", handleError(withWorkbenchLock(applyFocus)));
+$("remoteListButton").addEventListener("click", handleError(withWorkbenchLock(listRemote)));
+$("remoteOpenButton").addEventListener("click", handleError(withWorkbenchLock(openRemote)));
+$("pullPreviewButton").addEventListener("click", handleError(withWorkbenchLock(previewPull)));
+$("pullConfirmButton").addEventListener("click", handleError(withWorkbenchLock(confirmPull)));
+$("pushPreviewButton").addEventListener("click", handleError(withWorkbenchLock(previewPush)));
+$("pushConfirmButton").addEventListener("click", handleError(withWorkbenchLock(confirmPush)));
+$("uploadButton").addEventListener("click", handleError(withWorkbenchLock(uploadDocument)));
+$("providerSelect").addEventListener("change", handleError(withWorkbenchLock(loadProvider)));
+$("providerSaveButton").addEventListener("click", handleError(withWorkbenchLock(saveProvider)));
 $("downloadButton").addEventListener("click", downloadDocument);
 $("focusModeButton").addEventListener("click", () => {
   setFocusMode(!document.body.classList.contains("focus-mode"));
@@ -498,8 +547,9 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && document.body.classList.contains("focus-mode")) setFocusMode(false);
 });
 $("languageSelect").addEventListener("change", (event) => { state.language = event.target.value; applyLanguage(); });
+$("collectionInput").addEventListener("input", updatePullRequestFields);
 document.querySelectorAll(".editor-mode-switch button").forEach((button) => {
-  button.addEventListener("click", handleError(() => setEditorMode(button.dataset.editorMode)));
+  button.addEventListener("click", handleError(withWorkbenchLock(() => setEditorMode(button.dataset.editorMode))));
 });
 $("remoteObjectSelect").addEventListener("change", (event) => {
   const id = event.target.value;
@@ -513,9 +563,9 @@ document.querySelectorAll(".mode-button").forEach((button) => button.addEventLis
 const dropZone = $("dropZone");
 dropZone.addEventListener("dragover", (event) => { event.preventDefault(); dropZone.classList.add("dragging"); });
 dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragging"));
-dropZone.addEventListener("drop", handleError(async (event) => {
+dropZone.addEventListener("drop", handleError(withWorkbenchLock(async (event) => {
   event.preventDefault(); dropZone.classList.remove("dragging"); await openLocalFile(event.dataTransfer.files[0]);
-}));
+})));
 window.addEventListener("beforeunload", (event) => {
   if (!hasUnsavedChanges()) return;
   event.preventDefault();
@@ -524,5 +574,6 @@ window.addEventListener("beforeunload", (event) => {
 
 renderContent();
 applyLanguage();
+updatePullRequestFields();
 handleError(refreshCatalog)();
 handleError(loadProvider)();

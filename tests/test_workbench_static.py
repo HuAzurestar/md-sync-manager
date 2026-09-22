@@ -36,6 +36,7 @@ class WorkbenchStaticTests(unittest.TestCase):
             "editorModeTitle", "editorModeHint", "syncOutput", "dirtyBadge", "statusMessage",
             "diffStats", "diffFiles", "diffAdded", "diffDeleted", "diffViewer",
             "providerTokenStatus", "collectionExamples",
+            "pullRequestFields", "baseInput", "headInput",
         }
 
         for element_id in required_ids:
@@ -78,6 +79,9 @@ class WorkbenchStaticTests(unittest.TestCase):
         self.assertIn("setFocusMode", script)
         self.assertIn("refreshRenderedPreview", script)
         self.assertIn("setEditorMode", script)
+        self.assertIn("withWorkbenchLock", script)
+        self.assertIn("isPullRequestCollection", script)
+        self.assertNotIn('api("/api/v1/sync/push",', script)
         self.assertIn("window.Diff2Html.parse", script)
         self.assertIn("window.Diff2Html.html", script)
         self.assertNotIn("appendInlineMarkdown", script)

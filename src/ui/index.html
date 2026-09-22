@@ -78,9 +78,19 @@
               <option value="youtrack/issues/DEMO"></option>
               <option value="youtrack/articles/DEMO"></option>
               <option value="github/issues/owner/repo"></option>
+              <option value="github/pulls/owner/repo"></option>
               <option value="gitee/issues/owner/repo"></option>
+              <option value="gitee/pulls/owner/repo"></option>
             </datalist>
             <p class="hint" data-i18n="collectionHint">Use a complete collection path, for example youtrack/issues/DEMO.</p>
+            <fieldset id="pullRequestFields" class="conditional-fields" hidden>
+              <legend data-i18n="pullRequestBranches">Pull Request branches</legend>
+              <label for="baseInput" data-i18n="baseBranch">Base branch</label>
+              <input id="baseInput" autocomplete="off" placeholder="main">
+              <label for="headInput" data-i18n="headBranch">Head branch</label>
+              <input id="headInput" autocomplete="off" placeholder="feature/my-change">
+              <p class="hint" data-i18n="pullRequestBranchesHint">Required only when creating a GitHub or Gitee Pull Request.</p>
+            </fieldset>
             <button id="remoteListButton" type="button" data-i18n="listRemote">List remote</button>
             <select id="remoteObjectSelect" aria-label="Remote objects" data-i18n-aria-label="remoteObjectsLabel">
               <option value="">—</option>
