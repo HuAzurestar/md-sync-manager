@@ -221,11 +221,17 @@ class WorkbenchBrowserTests(unittest.TestCase):
             elif path.endswith("/sync/open"):
                 data = {"name": "remote.md", "content": "# Remote\noriginal\n"}
             elif path.endswith("/sync/pull/preview"):
-                data = {"preview_id": "browser-preview", "diff": "remote update"}
+                data = {
+                    "preview_id": "browser-preview",
+                    "diff": "--- local.md\n+++ remote.md\n@@ -1,2 +1,2 @@\n # Remote\n-local edit\n+remote update\n",
+                }
             elif path.endswith("/sync/pull/confirm"):
                 data = {"content": "# Remote\npulled\n"}
             elif path.endswith("/sync/push/preview"):
-                data = {"preview_id": "push-preview", "diff": "-remote\n+push me"}
+                data = {
+                    "preview_id": "push-preview",
+                    "diff": "--- remote.md\n+++ local.md\n@@ -1,2 +1,3 @@\n # Remote\n-remote\n+<script>window.diffXss = true</script>\n+push me\n",
+                }
             elif path.endswith("/sync/push/confirm"):
                 data = {"result": {"status": "success", "remote": "7"}}
             elif path.endswith("/sync/upload"):
@@ -257,6 +263,11 @@ class WorkbenchBrowserTests(unittest.TestCase):
             "!document.querySelector('#pullConfirmButton').disabled"
         )
         self.assertIn("remote update", self.page.locator("#syncOutput").inner_text())
+        self.assertEqual(self.page.locator("#diffAdded").inner_text(), "+1")
+        self.assertEqual(self.page.locator("#diffDeleted").inner_text(), "−1")
+        self.assertEqual(self.page.locator("#diffFiles").inner_text(), "1 file changed")
+        self.assertTrue(self.page.locator("#diffViewer .d2h-del").count() > 0)
+        self.assertTrue(self.page.locator("#diffViewer .d2h-ins").count() > 0)
         self.assertEqual(
             self.page.locator(".editor-column").get_attribute("data-editor-mode"),
             "difference",
@@ -273,6 +284,8 @@ class WorkbenchBrowserTests(unittest.TestCase):
             "!document.querySelector('#pushConfirmButton').disabled"
         )
         self.assertIn("push me", self.page.locator("#syncOutput").inner_text())
+        self.assertEqual(self.page.locator("#diffViewer script").count(), 0)
+        self.assertIsNone(self.page.evaluate("window.diffXss"))
         self.assertEqual(
             self.page.locator(".editor-column").get_attribute("data-editor-mode"),
             "difference",

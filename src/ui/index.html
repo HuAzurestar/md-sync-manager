@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Markdown Focus Workbench</title>
+    <link rel="stylesheet" href="/static/vendor/diff2html/diff2html.min.css">
     <link rel="stylesheet" href="/static/styles.css">
   </head>
   <body data-workbench="single-file">
@@ -148,7 +149,14 @@
         </div>
         <div class="editor-surface">
           <textarea id="editor" class="mode-surface active" spellcheck="false" aria-label="Markdown source editor"></textarea>
-          <div id="syncOutput" class="mode-surface output" aria-live="polite"></div>
+          <div id="syncOutput" class="mode-surface diff-surface" aria-live="polite">
+            <div id="diffStats" class="diff-stats" hidden>
+              <span id="diffFiles" class="diff-stat-files"></span>
+              <span id="diffAdded" class="diff-stat-added"></span>
+              <span id="diffDeleted" class="diff-stat-deleted"></span>
+            </div>
+            <div id="diffViewer" class="diff-viewer"></div>
+          </div>
           <article id="preview" class="mode-surface markdown-preview" tabindex="0" aria-label="Rendered Markdown preview"></article>
         </div>
         <div class="editor-mode-switch" role="group" aria-label="Editor display mode">
@@ -158,6 +166,7 @@
         </div>
       </section>
     </main>
+    <script src="/static/vendor/diff2html/diff2html.min.js" defer></script>
     <script src="/static/app.js" defer></script>
   </body>
 </html>

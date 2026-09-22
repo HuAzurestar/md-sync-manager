@@ -2,6 +2,7 @@ import re
 import shutil
 import subprocess
 import unittest
+import hashlib
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -15,6 +16,16 @@ UI = ROOT / "src" / "ui"
 
 
 class WorkbenchStaticTests(unittest.TestCase):
+    def test_vendored_diff2html_assets_match_the_pinned_distribution(self):
+        expected = {
+            "diff2html.min.js": "a2110a09cee157bd5466da77be02107ac81a0baa2bc1f3fe81aac8183314598e",
+            "diff2html.min.css": "d3ecc0e9b2b1e5c8466c19de29bed052fd0863475d25829ecc858446efded372",
+        }
+        vendor = UI / "vendor" / "diff2html"
+        for name, digest in expected.items():
+            with self.subTest(asset=name):
+                self.assertEqual(hashlib.sha256((vendor / name).read_bytes()).hexdigest(), digest)
+
     def test_single_file_shell_contains_confirmed_controls_only(self):
         html = (UI / "index.html").read_text(encoding="utf-8")
         required_ids = {
@@ -23,6 +34,7 @@ class WorkbenchStaticTests(unittest.TestCase):
             "remoteListButton", "remoteOpenButton", "pullPreviewButton",
             "pullConfirmButton", "pushPreviewButton", "pushConfirmButton", "uploadButton", "providerSaveButton",
             "editorModeTitle", "editorModeHint", "syncOutput", "dirtyBadge", "statusMessage",
+            "diffStats", "diffFiles", "diffAdded", "diffDeleted", "diffViewer",
             "providerTokenStatus", "collectionExamples",
         }
 
@@ -34,6 +46,8 @@ class WorkbenchStaticTests(unittest.TestCase):
         self.assertIn('data-editor-mode="difference"', html)
         self.assertIn('data-editor-mode="source"', html)
         self.assertIn('data-editor-mode="render"', html)
+        self.assertIn('/static/vendor/diff2html/diff2html.min.css', html)
+        self.assertIn('/static/vendor/diff2html/diff2html.min.js', html)
         self.assertIsNone(re.search(r"\breview\b", html, re.IGNORECASE))
         self.assertNotIn("tablist", html)
 
@@ -64,6 +78,8 @@ class WorkbenchStaticTests(unittest.TestCase):
         self.assertIn("setFocusMode", script)
         self.assertIn("refreshRenderedPreview", script)
         self.assertIn("setEditorMode", script)
+        self.assertIn("window.Diff2Html.parse", script)
+        self.assertIn("window.Diff2Html.html", script)
         self.assertNotIn("appendInlineMarkdown", script)
         self.assertNotIn("isMarkdownBlockStart", script)
 
@@ -85,15 +101,21 @@ class WorkbenchStaticTests(unittest.TestCase):
         html = client.get("/")
         script = client.get("/static/app.js")
         styles = client.get("/static/styles.css")
+        diff_script = client.get("/static/vendor/diff2html/diff2html.min.js")
+        diff_styles = client.get("/static/vendor/diff2html/diff2html.min.css")
 
         self.assertEqual(html.status_code, 200)
         self.assertEqual(script.status_code, 200)
         self.assertEqual(styles.status_code, 200)
+        self.assertEqual(diff_script.status_code, 200)
+        self.assertEqual(diff_styles.status_code, 200)
         self.assertIn("single-file", html.text)
         self.assertIn("refreshCatalog", script.text)
         self.assertIn("@media (max-width: 760px)", styles.text)
         self.assertIn('data-editor-mode="difference"', html.text)
         self.assertNotIn("mobile-pane-switch", html.text)
+        self.assertIn("Diff2Html", diff_script.text)
+        self.assertIn(".d2h-file-wrapper", diff_styles.text)
 
 
 if __name__ == "__main__":

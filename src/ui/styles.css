@@ -67,12 +67,6 @@ textarea { resize: vertical; }
 .transfer-row > div:first-child { display: grid; gap: .15rem; }
 .transfer-row span { color: var(--muted); font-size: .8rem; }
 .row-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; }
-.output { min-height: 5rem; max-height: 14rem; overflow: auto; padding: .65rem; background: #0f172a; color: #dbeafe; border-radius: .55rem; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .82rem; white-space: pre-wrap; }
-.output-line { display: block; min-height: 1.2em; }
-.output-line.diff-add { color: #86efac; background: rgb(22 101 52 / 25%); }
-.output-line.diff-remove { color: #fca5a5; background: rgb(153 27 27 / 25%); }
-.output-line.diff-meta { color: #93c5fd; }
-.output:empty::before { content: "Previewed differences and transfer results appear here."; color: #94a3b8; }
 details { padding-top: .7rem; }
 details[open] { display: grid; gap: .55rem; }
 summary { cursor: pointer; font-weight: 600; }
@@ -94,7 +88,18 @@ summary { cursor: pointer; font-weight: 600; }
 .mode-surface.active { display: block; }
 #editor { resize: none; border-left: 4px solid #94a3b8; background: var(--source); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; line-height: 1.55; }
 #preview { overflow: auto; overflow-wrap: anywhere; background: var(--paper); border: 1px solid var(--line); border-radius: .55rem; padding: clamp(1rem, 3vw, 2rem); line-height: 1.65; }
-#syncOutput { max-height: none; border: 1px solid #24324a; }
+.diff-surface { overflow: auto; border: 1px solid var(--line); border-radius: .55rem; background: var(--paper); }
+.diff-stats { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: .55rem; padding: .65rem .8rem; border-bottom: 1px solid var(--line); background: var(--paper); font-size: .82rem; font-weight: 650; }
+.diff-stat-files { color: var(--muted); margin-right: .2rem; }
+.diff-stat-added { color: #167c3a; }
+.diff-stat-deleted { color: #c62828; }
+.diff-viewer { min-width: 0; padding: .75rem; }
+.diff-viewer:empty::before { content: "Preview a Pull or Push to inspect source changes."; color: var(--muted); }
+.diff-viewer .d2h-wrapper { text-align: left; }
+.diff-viewer .d2h-file-wrapper { margin-bottom: 0; border-color: var(--line); }
+.diff-viewer .d2h-file-header { height: auto; padding: .55rem .7rem; background: #f6f8fa; }
+.diff-viewer .d2h-code-line-ctn { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.transfer-result { min-height: 100%; margin: 0; padding: 1rem; background: #0f172a; color: #dbeafe; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
 .editor-mode-switch { display: flex; gap: .4rem; justify-content: flex-start; }
 .editor-mode-switch button { padding: .4rem .65rem; font-size: .82rem; }
 .editor-mode-switch button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }

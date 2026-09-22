@@ -155,20 +155,36 @@ async function setEditorMode(mode) {
 }
 
 function renderSyncOutput(value, kind = "result", activate = false) {
-  const output = $("syncOutput");
-  output.replaceChildren();
+  const viewer = $("diffViewer");
+  const stats = $("diffStats");
+  viewer.replaceChildren();
+  stats.hidden = true;
   const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
   if (!text && kind !== "diff") return;
-  for (const line of (text || "No content change").split("\n")) {
-    const row = document.createElement("span");
-    row.className = "output-line";
-    if (kind === "diff") {
-      if (line.startsWith("+") && !line.startsWith("+++")) row.classList.add("diff-add");
-      else if (line.startsWith("-") && !line.startsWith("---")) row.classList.add("diff-remove");
-      else if (line.startsWith("@@") || line.startsWith("---") || line.startsWith("+++")) row.classList.add("diff-meta");
+  if (kind === "diff") {
+    const files = window.Diff2Html.parse(text || "");
+    const added = files.reduce((total, file) => total + file.addedLines, 0);
+    const deleted = files.reduce((total, file) => total + file.deletedLines, 0);
+    $("diffFiles").textContent = `${files.length} file${files.length === 1 ? "" : "s"} changed`;
+    $("diffAdded").textContent = `+${added}`;
+    $("diffDeleted").textContent = `−${deleted}`;
+    stats.hidden = false;
+    if (files.length) {
+      viewer.innerHTML = window.Diff2Html.html(files, {
+        drawFileList: false,
+        matching: "lines",
+        diffStyle: "word",
+        outputFormat: "line-by-line",
+        renderNothingWhenEmpty: false,
+      });
+    } else {
+      viewer.textContent = "No content change";
     }
-    row.textContent = line || " ";
-    output.append(row);
+  } else {
+    const result = document.createElement("pre");
+    result.className = "transfer-result";
+    result.textContent = text;
+    viewer.append(result);
   }
   if (activate) setEditorMode("difference");
 }
