@@ -326,6 +326,45 @@ class WorkbenchBrowserTests(unittest.TestCase):
         self.assertNotIn("base", payloads[1])
         self.assertNotIn("head", payloads[1])
 
+    def test_only_the_latest_transfer_preview_can_be_confirmed(self):
+        def fulfill_preview(route):
+            path = route.request.url.split("?", 1)[0]
+            if path.endswith("/sync/pull/preview"):
+                data = {
+                    "preview_id": "pull-preview",
+                    "direction": "pull",
+                    "diff": "--- a/doc.md\n+++ b/doc.md\n@@ -1 +1 @@\n-local\n+pull change\n",
+                }
+            elif path.endswith("/sync/push/preview"):
+                data = {
+                    "preview_id": "push-preview",
+                    "direction": "push",
+                    "diff": "--- a/doc.md\n+++ b/doc.md\n@@ -1 +1 @@\n-remote\n+push change\n",
+                }
+            else:
+                route.continue_()
+                return
+            route.fulfill(json={"status": "success", "data": data, "error": None})
+
+        self.page.route("**/api/v1/sync/**/preview", fulfill_preview)
+        self.page.locator('[data-panel="syncPanel"]').click()
+
+        self.page.locator("#pullPreviewButton").click()
+        self.page.wait_for_function("!document.querySelector('#pullConfirmButton').disabled")
+        self.assertTrue(self.page.locator("#pushConfirmButton").is_disabled())
+
+        self.page.locator("#pushPreviewButton").click()
+        self.page.wait_for_function("!document.querySelector('#pushConfirmButton').disabled")
+        self.assertTrue(self.page.locator("#pullConfirmButton").is_disabled())
+        self.assertIn("push change", self.page.locator("#syncOutput").inner_text())
+        self.assertIn("Push", self.page.locator("#diffFiles").inner_text())
+
+        self.page.locator("#pullPreviewButton").click()
+        self.page.wait_for_function("!document.querySelector('#pullConfirmButton').disabled")
+        self.assertTrue(self.page.locator("#pushConfirmButton").is_disabled())
+        self.assertIn("pull change", self.page.locator("#syncOutput").inner_text())
+        self.assertIn("Pull", self.page.locator("#diffFiles").inner_text())
+
     def test_remote_list_open_pull_push_and_upload_controls(self):
         def fulfill(route):
             path = route.request.url.split("?", 1)[0]

@@ -413,6 +413,8 @@ async function openRemote() {
 async function previewPull() {
   const source = $("remoteInput").value.trim() || null;
   const result = await api("/api/v1/sync/pull/preview", { name: state.name, content: state.content, source });
+  state.pushPreviewId = null;
+  $("pushConfirmButton").disabled = true;
   state.pullPreviewId = result.preview_id;
   state.transferPreview = { diff: result.diff, direction: result.direction };
   $("pullConfirmButton").disabled = false;
@@ -434,6 +436,8 @@ async function confirmPull() {
 
 async function previewPush() {
   const result = await api("/api/v1/sync/push/preview", { name: state.name, content: state.content });
+  state.pullPreviewId = null;
+  $("pullConfirmButton").disabled = true;
   state.pushPreviewId = result.preview_id;
   state.transferPreview = { diff: result.diff, direction: result.direction };
   $("pushConfirmButton").disabled = false;
