@@ -14,6 +14,7 @@ from src.api.models import (
     RemoteOpenRequest,
     UploadRequest,
 )
+from src.api.markdown_renderer import render_markdown
 from src.api.responses import success
 from src.controller.sync_controller import SyncController
 from src.service.workbench_sync_service import WorkbenchSyncService
@@ -112,6 +113,11 @@ async def upload(payload: UploadRequest, request: Request):
 @router.post("/document/inspect")
 async def inspect_document(payload: DocumentRequest, request: Request):
     return success(_sync(request).inspect(payload.name, payload.content))
+
+
+@router.post("/document/render")
+async def render_document(payload: DocumentRequest):
+    return success({"html": render_markdown(payload.content)})
 
 
 @router.post("/document/catalog")
