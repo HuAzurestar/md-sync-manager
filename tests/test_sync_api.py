@@ -105,7 +105,8 @@ class SyncApiTests(unittest.TestCase):
             )
 
         self.assertTrue(preview["changed"])
-        self.assertIn("--- local", preview["diff"])
+        self.assertIn("--- a/doc.md", preview["diff"])
+        self.assertIn("+++ b/doc.md", preview["diff"])
         self.assertEqual(rejected.status_code, 500)
         self.assertIn("no longer matches", rejected.json()["error"]["message"])
         self.assertEqual(confirmed.status_code, 200)
@@ -174,8 +175,8 @@ class SyncApiTests(unittest.TestCase):
             )
 
         self.assertTrue(preview["changed"])
-        self.assertIn("--- remote", preview["diff"])
-        self.assertIn("+++ local", preview["diff"])
+        self.assertIn("--- a/doc.md", preview["diff"])
+        self.assertIn("+++ b/doc.md", preview["diff"])
         self.assertEqual(changed_local.status_code, 500)
         self.assertIn("no longer matches", changed_local.json()["error"]["message"])
         self.assertEqual(confirmed.status_code, 200)

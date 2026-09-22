@@ -141,6 +141,17 @@ class WorkbenchSyncService:
             "section": refreshed.as_dict(),
         }
 
+    @staticmethod
+    def _source_diff(filename: str, before: str, after: str) -> str:
+        return "".join(
+            unified_diff(
+                before.splitlines(keepends=True),
+                after.splitlines(keepends=True),
+                fromfile=f"a/{filename}",
+                tofile=f"b/{filename}",
+            )
+        )
+
     def preview_pull(
         self, *, name: str, content: str, source: str | None = None
     ) -> dict[str, object]:
@@ -165,14 +176,7 @@ class WorkbenchSyncService:
             "direction": "pull",
             "remote": str(parsed),
             "changed": content != updated_content,
-            "diff": "".join(
-                unified_diff(
-                    content.splitlines(keepends=True),
-                    updated_content.splitlines(keepends=True),
-                    fromfile="local",
-                    tofile="remote",
-                )
-            ),
+            "diff": self._source_diff(filename, content, updated_content),
         }
 
     def confirm_pull(
@@ -218,14 +222,7 @@ class WorkbenchSyncService:
             "direction": "push",
             "remote": str(parsed),
             "changed": current_remote_content != content,
-            "diff": "".join(
-                unified_diff(
-                    current_remote_content.splitlines(keepends=True),
-                    content.splitlines(keepends=True),
-                    fromfile="remote",
-                    tofile="local",
-                )
-            ),
+            "diff": self._source_diff(filename, current_remote_content, content),
         }
 
     def confirm_push(

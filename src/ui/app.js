@@ -154,7 +154,7 @@ async function setEditorMode(mode) {
   if (mode === "render") await refreshRenderedPreview();
 }
 
-function renderSyncOutput(value, kind = "result", activate = false) {
+function renderSyncOutput(value, kind = "result", activate = false, direction = null) {
   const viewer = $("diffViewer");
   const stats = $("diffStats");
   viewer.replaceChildren();
@@ -165,7 +165,9 @@ function renderSyncOutput(value, kind = "result", activate = false) {
     const files = window.Diff2Html.parse(text || "");
     const added = files.reduce((total, file) => total + file.addedLines, 0);
     const deleted = files.reduce((total, file) => total + file.deletedLines, 0);
-    $("diffFiles").textContent = `${files.length} file${files.length === 1 ? "" : "s"} changed`;
+    const transfer = direction === "pull" ? "Pull · remote → source" : (direction === "push" ? "Push · source → remote" : "");
+    const fileCount = `${files.length} file${files.length === 1 ? "" : "s"} changed`;
+    $("diffFiles").textContent = transfer ? `${transfer} · ${fileCount}` : fileCount;
     $("diffAdded").textContent = `+${added}`;
     $("diffDeleted").textContent = `−${deleted}`;
     stats.hidden = false;
@@ -324,7 +326,7 @@ async function previewPull() {
   const result = await api("/api/v1/sync/pull/preview", { name: state.name, content: state.content, source });
   state.pullPreviewId = result.preview_id;
   $("pullConfirmButton").disabled = false;
-  renderSyncOutput(result.diff, "diff", true);
+  renderSyncOutput(result.diff, "diff", true, result.direction);
   setStatus("Pull preview ready");
 }
 
@@ -343,7 +345,7 @@ async function previewPush() {
   const result = await api("/api/v1/sync/push/preview", { name: state.name, content: state.content });
   state.pushPreviewId = result.preview_id;
   $("pushConfirmButton").disabled = false;
-  renderSyncOutput(result.diff, "diff", true);
+  renderSyncOutput(result.diff, "diff", true, result.direction);
   setStatus("Push preview ready");
 }
 

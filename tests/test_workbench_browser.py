@@ -223,14 +223,16 @@ class WorkbenchBrowserTests(unittest.TestCase):
             elif path.endswith("/sync/pull/preview"):
                 data = {
                     "preview_id": "browser-preview",
-                    "diff": "--- local.md\n+++ remote.md\n@@ -1,2 +1,2 @@\n # Remote\n-local edit\n+remote update\n",
+                    "direction": "pull",
+                    "diff": "--- a/remote.md\n+++ b/remote.md\n@@ -1,2 +1,2 @@\n # Remote\n-local edit\n+remote update\n",
                 }
             elif path.endswith("/sync/pull/confirm"):
                 data = {"content": "# Remote\npulled\n"}
             elif path.endswith("/sync/push/preview"):
                 data = {
                     "preview_id": "push-preview",
-                    "diff": "--- remote.md\n+++ local.md\n@@ -1,2 +1,3 @@\n # Remote\n-remote\n+<script>window.diffXss = true</script>\n+push me\n",
+                    "direction": "push",
+                    "diff": "--- a/remote.md\n+++ b/remote.md\n@@ -1,2 +1,3 @@\n # Remote\n-remote\n+<script>window.diffXss = true</script>\n+push me\n",
                 }
             elif path.endswith("/sync/push/confirm"):
                 data = {"result": {"status": "success", "remote": "7"}}
@@ -265,7 +267,10 @@ class WorkbenchBrowserTests(unittest.TestCase):
         self.assertIn("remote update", self.page.locator("#syncOutput").inner_text())
         self.assertEqual(self.page.locator("#diffAdded").inner_text(), "+1")
         self.assertEqual(self.page.locator("#diffDeleted").inner_text(), "−1")
-        self.assertEqual(self.page.locator("#diffFiles").inner_text(), "1 file changed")
+        self.assertEqual(
+            self.page.locator("#diffFiles").inner_text(),
+            "Pull · remote → source · 1 file changed",
+        )
         self.assertTrue(self.page.locator("#diffViewer .d2h-del").count() > 0)
         self.assertTrue(self.page.locator("#diffViewer .d2h-ins").count() > 0)
         self.assertEqual(
