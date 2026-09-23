@@ -130,6 +130,45 @@ class WorkbenchBrowserTests(unittest.TestCase):
         self.assertEqual(self.page.locator("#dirtyBadge").get_attribute("data-state"), "dirty")
         self.assertEqual(self.page.locator("#statusMessage").inner_text(), "Copy download started")
 
+    def test_source_edit_preserves_existing_line_endings(self):
+        original = "# Root\r\nintro\n## One\r\nold\r\n"
+        self.page.locator("#fileInput").set_input_files(
+            {"name": "mixed.md", "mimeType": "text/markdown", "buffer": original.encode()}
+        )
+        self.page.locator("#editor").fill("# Root\nintro\n## One\nnew\n")
+        self.assertEqual(
+            self.page.evaluate("state.content"),
+            "# Root\r\nintro\n## One\r\nnew\r\n",
+        )
+
+    def test_crlf_focus_write_preserves_bytes_and_newline_style(self):
+        original = "# Root\r\nintro\r\n## One\r\nold\r\n## Two\r\nkeep\r\n"
+        self.page.locator("#fileInput").set_input_files(
+            {"name": "crlf.md", "mimeType": "text/markdown", "buffer": original.encode()}
+        )
+        self.page.locator(".catalog-select").nth(1).check()
+        self.page.locator("#focusReadButton").click()
+        self.page.wait_for_function("!document.querySelector('#focusApplyButton').disabled")
+        self.assertNotIn("\r\n", self.page.locator("#focusEditor").input_value())
+        self.page.locator("#focusApplyButton").click()
+        self.page.wait_for_function(
+            "document.querySelector('#statusMessage').textContent === 'Section applied'"
+        )
+        self.assertEqual(self.page.evaluate("state.content"), original)
+
+        self.page.locator(".catalog-select").nth(1).check()
+        self.page.locator("#focusReadButton").click()
+        self.page.wait_for_function("!document.querySelector('#focusApplyButton').disabled")
+        self.page.locator("#focusEditor").fill("## One\nnew\n")
+        self.page.locator("#focusApplyButton").click()
+        self.page.wait_for_function(
+            "document.querySelector('#statusMessage').textContent === 'Section applied'"
+        )
+        self.assertEqual(
+            self.page.evaluate("state.content"),
+            "# Root\r\nintro\r\n## One\r\nnew\r\n## Two\r\nkeep\r\n",
+        )
+
     def test_remote_sync_does_not_claim_local_file_was_saved(self):
         original = "---\ntitle: Demo\nremote: github/issues/o/r/9\n---\n\n# Old\n"
         self.page.locator("#fileInput").set_input_files(

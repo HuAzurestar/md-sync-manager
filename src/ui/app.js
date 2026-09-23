@@ -170,6 +170,18 @@ function hasUnsavedChanges() {
   return state.content !== state.savedContent;
 }
 
+function restoreLineEndings(value, previous) {
+  const normalizedValue = value.replace(/\r\n|\r/g, "\n");
+  if (normalizedValue === previous.replace(/\r\n|\r/g, "\n")) return previous;
+  const endings = previous.match(/\r\n|\r|\n/g) || [];
+  const parts = normalizedValue.split("\n");
+  if (parts.length - 1 === endings.length) {
+    return parts.map((part, index) => part + (endings[index] || "")).join("");
+  }
+  const preferred = endings[0] || "\n";
+  return normalizedValue.replace(/\n/g, preferred);
+}
+
 function confirmDiscard() {
   return !hasUnsavedChanges() || window.confirm(messages[state.language].discardChanges);
 }
@@ -396,12 +408,15 @@ async function readFocus() {
 async function applyFocus() {
   const selectors = selectedHeadings();
   if (selectors.length !== 1 || !state.selectedSection) return;
+  const replacement = restoreLineEndings(
+    $("focusEditor").value, state.selectedSection.source,
+  );
   const result = await api("/api/v1/document/focus/apply", {
     name: state.name,
     content: state.content,
     selector: selectors[0],
     expected_source: state.selectedSection.source,
-    replacement: $("focusEditor").value,
+    replacement,
   });
   state.content = result.content;
   state.selectedSection = result.section;
@@ -562,7 +577,7 @@ function handleError(action) {
 }
 
 $("editor").addEventListener("input", () => {
-  state.content = $("editor").value;
+  state.content = restoreLineEndings($("editor").value, state.content);
   state.renderedContent = null;
   updateFocusSelection(true);
   state.pullPreviewId = null;

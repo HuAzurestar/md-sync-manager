@@ -274,9 +274,16 @@ class WorkbenchSyncService:
             path.write_text(prepared, encoding="utf-8", newline="")
             try:
                 result = self.sync_service.upload(path, target, parent, base, head)
+                updated = path.read_text(encoding="utf-8")
             except PartialSyncError as exc:
                 result = exc.as_result()
-            updated = path.read_text(encoding="utf-8")
+                document = parse_text(prepared, Path(filename))
+                if parent:
+                    document.metadata["parent"] = str(
+                        RemotePath.parse(parent, require="object")
+                    )
+                document.remote = exc.remote
+                updated = render_document(document)
         return {
             "content": updated,
             "document": self.inspect(filename, updated),

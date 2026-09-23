@@ -127,7 +127,7 @@ Safety rules:
 - `pull` reads one remote and overwrites only local title/body. The Workbench API requires preview and explicit confirmation before applying it.
 - `push` requires `remote`, updates only title/body, and never creates an object. The Workbench API requires preview and explicit confirmation before applying it.
 - `upload` requires no `remote` and an explicit collection target; it creates and binds one object.
-- A partial multi-step provider result is reported explicitly instead of being presented as full success.
+- A partial multi-step provider result is reported explicitly instead of being presented as full success. If upload created a remote object, the returned Workbench document includes its binding so a retry cannot create another object.
 - Until stable error classes are introduced, API validation and provider failures return HTTP 500 with a readable error envelope.
 
 ## Verification

@@ -6,9 +6,9 @@ from fastapi.testclient import TestClient
 
 from src.api.app import create_app
 from src.core.config import ConfigStore
-from src.core.remote import RemoteContent, RemoteItem
+from src.core.remote import RemoteContent, RemoteItem, RemotePath
 from src.providers.base import RemoteProvider
-from src.service.sync_service import SyncService
+from src.service.sync_service import PartialSyncError, SyncService
 
 
 class FakeProvider(RemoteProvider):
@@ -153,6 +153,63 @@ class SyncApiTests(unittest.TestCase):
             )
         self.assertEqual(direct.status_code, 404)
         self.assertEqual(provider.calls, [])
+
+    def test_upload_rejects_an_already_bound_document(self):
+        with tempfile.TemporaryDirectory() as directory:
+            client, provider = self.make_client(directory)
+            response = client.post(
+                "/api/v1/sync/upload",
+                json={
+                    "name": "bound.md",
+                    "content": bound_content(),
+                    "target": "github/issues/o/r",
+                },
+            )
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("unbound document", response.json()["error"]["message"])
+        self.assertEqual(provider.calls, [])
+
+    def test_partial_upload_returns_binding_even_when_temporary_write_fails(self):
+        provider = FakeProvider()
+        service = SyncService((provider,))
+
+        def fail_after_creation(path, target, parent=None, base=None, head=None):
+            collection = RemotePath.parse(target, require="collection")
+            remote = provider.upload(collection, RemoteContent("New", "# New\n"))
+            raise PartialSyncError(
+                "created but could not save the binding",
+                operation="upload",
+                remote=remote,
+            )
+
+        service.upload = fail_after_creation
+        client = TestClient(create_app(sync_service=service), raise_server_exceptions=False)
+        payload = {
+            "name": "new.md",
+            "content": "# New\n",
+            "target": "github/issues/o/r",
+            "parent": "github/issues/o/r/1",
+        }
+        first = client.post("/api/v1/sync/upload", json=payload)
+        bound_content_after_failure = first.json()["data"]["content"]
+
+        service.upload = SyncService.upload.__get__(service, SyncService)
+        retry = client.post(
+            "/api/v1/sync/upload",
+            json={**payload, "content": bound_content_after_failure},
+        )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.json()["data"]["result"]["status"], "PARTIAL")
+        self.assertEqual(
+            first.json()["data"]["document"]["remote"], "github/issues/o/r/42"
+        )
+        self.assertEqual(
+            first.json()["data"]["document"]["parent"], "github/issues/o/r/1"
+        )
+        self.assertEqual(retry.status_code, 500)
+        self.assertIn("unbound document", retry.json()["error"]["message"])
+        self.assertEqual([call[0] for call in provider.calls], ["upload"])
 
     def test_push_preview_requires_unchanged_local_and_remote_content(self):
         original = bound_content("# Local\nPush this body\n")
