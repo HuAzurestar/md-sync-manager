@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Markdown Focus Workbench</title>
+    <link rel="stylesheet" href="/static/vendor/diff2html/diff2html.min.css">
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body data-workbench="single-file">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">PIRC-14</p>
+        <h1 data-i18n="title">Markdown Focus Workbench</h1>
+      </div>
+      <div class="header-actions">
+        <button id="openFileButton" type="button" data-i18n="openFile">Open file</button>
+        <input id="fileInput" type="file" accept=".md,text/markdown" hidden>
+        <button id="focusModeButton" type="button" aria-pressed="false" data-i18n="immersiveMode">Immersive editing</button>
+        <select id="languageSelect" aria-label="Language" data-i18n-aria-label="languageLabel">
+          <option value="en">English</option>
+          <option value="zh">中文</option>
+        </select>
+      </div>
+    </header>
+
+    <nav class="mode-nav" aria-label="Workbench mode" data-i18n-aria-label="workbenchModeLabel">
+      <button class="mode-button active" type="button" data-panel="documentPanel" data-i18n="documentMode">Document / Focus</button>
+      <button class="mode-button" type="button" data-panel="syncPanel" data-i18n="syncMode">Sync</button>
+    </nav>
+
+    <main id="dropZone" class="workspace">
+      <aside class="control-column">
+        <section id="documentPanel" class="control-panel active">
+          <div class="tool-section">
+            <div class="section-heading">
+              <div>
+                <p class="step-label" data-i18n="stepOne">Step 1</p>
+                <h2 data-i18n="catalog">Catalog</h2>
+              </div>
+              <button id="catalogButton" type="button" data-i18n="refresh">Refresh</button>
+            </div>
+            <p class="hint" data-i18n="catalogHint">Select headings from the current document.</p>
+            <div id="catalogList" class="catalog-list" aria-live="polite"></div>
+          </div>
+
+          <div class="tool-section">
+            <div class="section-heading">
+              <div>
+                <p class="step-label" data-i18n="stepTwo">Step 2</p>
+                <h2 data-i18n="focusReadTitle">Focus read</h2>
+              </div>
+              <span id="focusSelectionBadge" class="selection-badge">0 selected</span>
+            </div>
+            <p class="hint" data-i18n="focusReadHint">Select one or more headings, then read their exact source.</p>
+            <button id="focusReadButton" type="button" disabled data-i18n="readSelection">Read selected sections</button>
+            <pre id="focusReadOutput" class="focus-output" aria-live="polite" data-empty-message="Select headings and read to inspect source."></pre>
+          </div>
+
+          <div class="tool-section">
+            <div>
+              <p class="step-label" data-i18n="stepThree">Step 3</p>
+              <h2 data-i18n="focusWriteTitle">Focus write</h2>
+            </div>
+            <p id="focusWriteHint" class="hint" data-i18n="focusWriteHint">Select exactly one heading and read it before editing.</p>
+            <label for="focusEditor" data-i18n="focusSource">Selected section source</label>
+            <textarea id="focusEditor" rows="10" spellcheck="false" disabled></textarea>
+            <button id="focusApplyButton" type="button" disabled data-i18n="applySelection">Write selected section</button>
+          </div>
+        </section>
+
+        <section id="syncPanel" class="control-panel">
+          <div class="tool-section">
+            <h2 data-i18n="remoteBrowse">Remote list</h2>
+            <label for="collectionInput" data-i18n="collection">Collection</label>
+            <input id="collectionInput" value="youtrack/issues/DEMO" list="collectionExamples">
+            <datalist id="collectionExamples">
+              <option value="youtrack/issues/DEMO"></option>
+              <option value="youtrack/articles/DEMO"></option>
+              <option value="github/issues/owner/repo"></option>
+              <option value="github/pulls/owner/repo"></option>
+              <option value="gitee/issues/owner/repo"></option>
+              <option value="gitee/pulls/owner/repo"></option>
+            </datalist>
+            <p class="hint" data-i18n="collectionHint">Use a complete collection path, for example youtrack/issues/DEMO.</p>
+            <fieldset id="pullRequestFields" class="conditional-fields" hidden>
+              <legend data-i18n="pullRequestBranches">Pull Request branches</legend>
+              <label for="baseInput" data-i18n="baseBranch">Base branch</label>
+              <input id="baseInput" autocomplete="off" placeholder="main">
+              <label for="headInput" data-i18n="headBranch">Head branch</label>
+              <input id="headInput" autocomplete="off" placeholder="feature/my-change">
+              <p class="hint" data-i18n="pullRequestBranchesHint">Required only when creating a GitHub or Gitee Pull Request.</p>
+            </fieldset>
+            <button id="remoteListButton" type="button" data-i18n="listRemote">List remote</button>
+            <select id="remoteObjectSelect" aria-label="Remote objects" data-i18n-aria-label="remoteObjectsLabel">
+              <option value="">—</option>
+            </select>
+            <label for="remoteInput" data-i18n="remoteObject">Remote object</label>
+            <input id="remoteInput" placeholder="youtrack/issues/DEMO/1">
+            <button id="remoteOpenButton" type="button" data-i18n="openRemote">Open remote</button>
+          </div>
+
+          <div class="tool-section transfer-section">
+            <h2 data-i18n="transferTitle">Transfer</h2>
+            <p class="hint" data-i18n="transferHint">Preview remote changes before replacing either side.</p>
+            <div class="transfer-row">
+              <div><strong data-i18n="pull">Pull</strong><span data-i18n="pullHint">Remote → editor</span></div>
+              <div class="row-actions">
+                <button id="pullPreviewButton" type="button" data-i18n="transferPreview">Preview changes</button>
+                <button id="pullConfirmButton" type="button" disabled data-i18n="confirm">Confirm</button>
+              </div>
+            </div>
+            <div class="transfer-row">
+              <div><strong data-i18n="push">Push</strong><span data-i18n="pushHint">Editor → remote</span></div>
+              <div class="row-actions">
+                <button id="pushPreviewButton" type="button" data-i18n="transferPreview">Preview changes</button>
+                <button id="pushConfirmButton" type="button" disabled data-i18n="confirm">Confirm</button>
+              </div>
+            </div>
+            <div class="transfer-row">
+              <div><strong data-i18n="fileCopies">File copies</strong><span data-i18n="fileCopiesHint">Local copy or new remote</span></div>
+              <div class="row-actions">
+                <button id="downloadButton" type="button" data-i18n="download">Download</button>
+                <button id="uploadButton" type="button" data-i18n="upload">Upload / New</button>
+              </div>
+            </div>
+          </div>
+
+          <details class="tool-section">
+            <summary data-i18n="providerConfig">Provider configuration</summary>
+            <label for="providerSelect" data-i18n="provider">Provider</label>
+            <select id="providerSelect">
+              <option value="github">GitHub</option>
+              <option value="gitee">Gitee</option>
+              <option value="youtrack">YouTrack</option>
+            </select>
+            <label class="checkbox-label"><input id="providerEnabled" type="checkbox"> <span data-i18n="enabled">Enabled</span></label>
+            <label for="providerUrl" data-i18n="url">URL</label>
+            <input id="providerUrl">
+            <label for="providerToken" data-i18n="token">Token</label>
+            <input id="providerToken" type="password" autocomplete="new-password">
+            <p id="providerTokenStatus" class="token-status" role="status"></p>
+            <label class="checkbox-label"><input id="providerClearToken" type="checkbox" disabled> <span data-i18n="clearStoredToken">Clear stored token</span></label>
+            <button id="providerSaveButton" type="button" data-i18n="saveProvider">Save provider</button>
+          </details>
+        </section>
+      </aside>
+
+      <section class="editor-column" data-editor-mode="source">
+        <div class="workbench-heading">
+          <div>
+            <h2 id="editorModeTitle" data-i18n="editor">Markdown source</h2>
+            <span id="editorModeHint" class="mode-hint" data-i18n="sourceHint">Edit the Markdown text directly.</span>
+          </div>
+          <div class="document-state">
+            <span id="statusMessage" role="status" aria-live="polite">Ready</span>
+            <span id="dirtyBadge" class="status-pill" data-state="clean">No local copy</span>
+            <span id="currentName" class="current-name">untitled.md</span>
+          </div>
+        </div>
+        <div class="editor-surface">
+          <textarea id="editor" class="mode-surface active" spellcheck="false" aria-label="Markdown source editor" data-i18n-aria-label="editorLabel"></textarea>
+          <div id="syncOutput" class="mode-surface diff-surface" aria-live="polite">
+            <div id="diffStats" class="diff-stats" hidden>
+              <span id="diffFiles" class="diff-stat-files"></span>
+              <span id="diffAdded" class="diff-stat-added"></span>
+              <span id="diffDeleted" class="diff-stat-deleted"></span>
+            </div>
+            <div id="diffViewer" class="diff-viewer" data-empty-message="Preview a Pull or Push to inspect source changes."></div>
+          </div>
+          <article id="preview" class="mode-surface markdown-preview" tabindex="0" aria-label="Rendered Markdown preview" data-i18n-aria-label="previewLabel"></article>
+        </div>
+        <div class="editor-mode-switch" role="group" aria-label="Editor display mode" data-i18n-aria-label="editorDisplayModeLabel">
+          <button type="button" data-editor-mode="difference" aria-pressed="false" data-i18n="differenceMode">Difference</button>
+          <button class="active" type="button" data-editor-mode="source" aria-pressed="true" data-i18n="sourceMode">Markdown source</button>
+          <button type="button" data-editor-mode="render" aria-pressed="false" data-i18n="renderMode">Render</button>
+        </div>
+      </section>
+    </main>
+    <script src="/static/vendor/diff2html/diff2html.min.js" defer></script>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

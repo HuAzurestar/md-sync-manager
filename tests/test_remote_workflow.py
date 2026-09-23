@@ -119,6 +119,21 @@ class RemotePathTests(unittest.TestCase):
 
 
 class DocumentTests(unittest.TestCase):
+    def test_front_matter_delimiters_must_occupy_their_own_lines(self):
+        source = (
+            "---\r\ntitle: A---B\r\nremote: github/issues/o/r/2\r\n"
+            "---\r\n\r\nBody --- stays in the body\r\n"
+        )
+        document = parse_text(source)
+
+        self.assertEqual(document.title, "A---B")
+        self.assertEqual(str(document.remote), "github/issues/o/r/2")
+        self.assertEqual(document.body, "Body --- stays in the body\r\n")
+        with self.assertRaisesRegex(ValueError, "not closed"):
+            parse_text("---\ntitle: A---B\n")
+        with self.assertRaisesRegex(ValueError, "requires YAML front matter"):
+            parse_text("--- trailing\ntitle: A\n---\n")
+
     def test_minimal_scalar_remote_round_trip(self):
         source = "---\ntitle: Example\nparent: github/issues/o/r/1\nremote: github/issues/o/r/2\n---\n\nBody\n"
         document = parse_text(source)
@@ -251,9 +266,17 @@ class ProviderContractTests(unittest.TestCase):
         )
         self.assertEqual(len({provider.route for provider in providers}), 6)
 
-    def test_cli_has_only_the_four_public_operations(self):
+    def test_cli_has_only_the_confirmed_public_operations(self):
         parser = build_parser()
-        for command in ["list", "pull", "push", "upload"]:
+        for command in [
+            "list",
+            "pull",
+            "push",
+            "upload",
+            "catalog",
+            "focus-read",
+            "focus-apply",
+        ]:
             with self.subTest(command=command):
                 arguments = [command]
                 if command == "list":
@@ -262,8 +285,22 @@ class ProviderContractTests(unittest.TestCase):
                     arguments += ["doc.md"]
                 elif command == "push":
                     arguments += ["doc.md"]
-                else:
+                elif command == "upload":
                     arguments += ["doc.md", "--target", "github/issues/o/r"]
+                elif command == "catalog":
+                    arguments += ["doc.md"]
+                elif command == "focus-read":
+                    arguments += ["doc.md", "--selector", "# Root"]
+                else:
+                    arguments += [
+                        "doc.md",
+                        "--selector",
+                        "# Root",
+                        "--expected-file",
+                        "expected.txt",
+                        "--replacement-file",
+                        "replacement.txt",
+                    ]
                 self.assertEqual(parser.parse_args(arguments).command, command)
         with redirect_stderr(StringIO()):
             with self.assertRaises(SystemExit):

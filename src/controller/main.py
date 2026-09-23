@@ -1,17 +1,20 @@
 """Command-line entry point for Markdown remote operations."""
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 from src.controller.sync_controller import SyncController
+from src.core.catalog import catalog_file, format_catalog
 from src.core.config import load_config
+from src.core.focus import focus_apply_file, focus_read_file, read_text_exact
 from src.core.logging import get_logger
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="List, pull, push, or upload Markdown content"
+        description="Catalog or synchronize Markdown content"
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -39,6 +42,25 @@ def build_parser() -> argparse.ArgumentParser:
     upload.add_argument("--parent", help="optional parent object path")
     upload.add_argument("--base", help="base branch required for Pull Request upload")
     upload.add_argument("--head", help="head branch required for Pull Request upload")
+
+    catalog = commands.add_parser(
+        "catalog", help="list ATX headings from one Markdown file"
+    )
+    catalog.add_argument("file", type=Path)
+
+    focus_read = commands.add_parser(
+        "focus-read", help="read exact heading ranges from one Markdown file"
+    )
+    focus_read.add_argument("file", type=Path)
+    focus_read.add_argument("--selector", action="append", required=True)
+
+    focus_apply = commands.add_parser(
+        "focus-apply", help="replace one exact retained heading range"
+    )
+    focus_apply.add_argument("file", type=Path)
+    focus_apply.add_argument("--selector", required=True)
+    focus_apply.add_argument("--expected-file", type=Path, required=True)
+    focus_apply.add_argument("--replacement-file", type=Path, required=True)
     return parser
 
 
@@ -74,8 +96,30 @@ def main() -> None:
         )
 
     sys.excepthook = log_uncaught
-    config = load_config()
-    controller = SyncController(config)
+    if args.command == "catalog":
+        print(format_catalog(catalog_file(args.file)))
+        return
+    if args.command == "focus-read":
+        sections = focus_read_file(args.file, args.selector)
+        print(
+            json.dumps(
+                {"sections": [section.as_dict() for section in sections]},
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+    if args.command == "focus-apply":
+        section = focus_apply_file(
+            args.file,
+            selector=args.selector,
+            expected_source=read_text_exact(args.expected_file),
+            replacement=read_text_exact(args.replacement_file),
+        )
+        print(json.dumps({"status": "SUCCESS", "previous": section.as_dict()}))
+        return
+
+    controller = SyncController(load_config())
     if args.command == "list":
         print(format_table(controller.list(args.target)))
     elif args.command == "pull":

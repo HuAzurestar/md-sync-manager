@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -10,7 +11,9 @@ def get_logger(cli_args: str | None = None) -> logging.Logger:
         return logger
     logger.setLevel(logging.INFO)
     stamp = datetime.now().strftime("%Y%m%d.%H%M%S.%f")[:20]
-    path = Path(__file__).resolve().parents[2] / "logs" / f"md-sync.{stamp}.log"
+    default_directory = Path(__file__).resolve().parents[2] / "logs"
+    directory = Path(os.getenv("SMMD_LOG_DIR", default_directory)).expanduser()
+    path = directory / f"md-sync.{stamp}.log"
     path.parent.mkdir(parents=True, exist_ok=True)
     formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
     file_handler = logging.FileHandler(path, encoding="utf-8")
