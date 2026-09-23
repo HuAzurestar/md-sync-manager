@@ -24,6 +24,14 @@ class PartialSyncError(RuntimeError):
         }
 
 
+class ProviderNotConfiguredError(ValueError):
+    """A supported provider has no active credentials for a remote route."""
+
+    def __init__(self, source: str):
+        self.source = source
+        super().__init__(f"provider not configured: {source}")
+
+
 class SyncService:
     def __init__(
         self,
@@ -159,9 +167,7 @@ class SyncService:
         self.access_policy.require(path)
         provider = self.providers.get(path.route)
         if not provider:
-            raise ValueError(
-                f"provider not configured: {path.source}/{path.resource_type}"
-            )
+            raise ProviderNotConfiguredError(path.source)
         return provider
 
     @staticmethod

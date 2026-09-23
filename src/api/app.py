@@ -13,7 +13,7 @@ from src.controller.sync_controller import SyncController
 from src.core.config import ConfigStore
 from src.core.capabilities import P0_CAPABILITIES
 from src.core.focus import FocusConflictError, FocusSelectionError
-from src.service.sync_service import SyncService
+from src.service.sync_service import ProviderNotConfiguredError, SyncService
 from src.service.workbench_sync_service import WorkbenchSyncService
 
 
@@ -35,6 +35,11 @@ SAFE_VALUE_ERRORS = frozenset({
 
 
 def _public_error(exc: Exception) -> str:
+    if isinstance(exc, ProviderNotConfiguredError):
+        provider = {
+            "github": "GitHub", "gitee": "Gitee", "youtrack": "YouTrack"
+        }[exc.source]
+        return f"Set up {provider} in Provider configuration."
     if isinstance(exc, FocusConflictError):
         return "current heading range no longer matches the retained source"
     if isinstance(exc, FocusSelectionError):

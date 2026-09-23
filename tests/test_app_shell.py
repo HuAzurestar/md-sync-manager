@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from src.api.app import create_app
 from src.controller.server import DEFAULT_HOST, DEFAULT_PORT
 from src.core.capabilities import P0_CAPABILITIES
+from src.service.sync_service import SyncService
 
 
 OUT_OF_SCOPE_CAPABILITIES = {
@@ -70,6 +71,19 @@ class AppShellTests(unittest.TestCase):
         self.assertNotIn("private-markdown-body", content.text)
         self.assertNotIn("private-provider-token", token.text)
         self.assertIn("required fields", content.json()["error"]["message"])
+
+    def test_missing_provider_has_actionable_safe_error(self):
+        response = TestClient(
+            create_app(sync_service=SyncService()), raise_server_exceptions=False
+        ).post(
+            "/api/v1/sync/list", json={"target": "youtrack/issues/DEMO"}
+        )
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(
+            response.json()["error"]["message"],
+            "Set up YouTrack in Provider configuration.",
+        )
 
     def test_inspect_preserves_inline_dashes_in_front_matter(self):
         response = TestClient(create_app()).post(
