@@ -5,6 +5,7 @@ const state = {
   name: "untitled.md",
   content: "# Untitled\n",
   savedContent: "# Untitled\n",
+  hasLocalFile: false,
   catalog: [],
   selectedSection: null,
   pullPreviewId: null,
@@ -36,7 +37,10 @@ const messages = {
     differenceMode: "Difference", sourceMode: "Markdown source", renderMode: "Render",
     differenceHint: "Inspect the latest pull or push difference.", sourceHint: "Edit the Markdown text directly.", renderHint: "Secondary read-only view rendered with CommonMark.", rendering: "Rendering…",
     discardChanges: "Discard unsaved changes and open another document?",
-    saved: "Saved", unsaved: "Unsaved", focusEntered: "Immersive editing enabled; press Escape to exit",
+    localUnchanged: "Local file unchanged", unsavedLocal: "Not saved locally", noLocalCopy: "No local copy",
+    downloadStarted: "Copy download started", transferTargetChanged: "Transfer target changed; preview again.",
+    clearStoredToken: "Clear stored token",
+    focusEntered: "Immersive editing enabled; press Escape to exit",
     focusExited: "Immersive editing disabled", tokenConfigured: "Token configured", tokenMissing: "Token not configured",
     tokenKeep: "Leave blank to keep the configured token", tokenEnter: "Enter a provider token",
     selectedCount: (count) => `${count} selected`, focusWriteReady: "Edit the exact source below, then write it back safely.",
@@ -71,7 +75,10 @@ const messages = {
     provider: "Provider", enabled: "启用", url: "地址", token: "令牌", saveProvider: "保存 Provider", editor: "Markdown 源码", preview: "Markdown 渲染",
     differenceMode: "差异", sourceMode: "Markdown 源码", renderMode: "渲染",
     differenceHint: "检查最近一次 Pull 或 Push 的差异。", sourceHint: "直接编辑 Markdown 文本。", renderHint: "使用 CommonMark 的次要只读视图。", rendering: "正在渲染…",
-    saved: "已保存", unsaved: "未保存", focusEntered: "已进入沉浸编辑；按 Esc 退出",
+    localUnchanged: "本地文件未更改", unsavedLocal: "尚未保存到本地", noLocalCopy: "无本地副本",
+    downloadStarted: "已开始下载副本", transferTargetChanged: "传输目标已更改；请重新预览。",
+    clearStoredToken: "清除已存储令牌",
+    focusEntered: "已进入沉浸编辑；按 Esc 退出",
     focusExited: "已退出沉浸编辑", tokenConfigured: "令牌已配置", tokenMissing: "令牌未配置",
     tokenKeep: "留空可保留当前令牌", tokenEnter: "请输入 Provider 令牌",
     selectedCount: (count) => `已选 ${count} 项`, focusWriteReady: "编辑下方精确原文，然后安全写回。",
@@ -124,9 +131,10 @@ function setLocalizedStatus(key, args = [], error = false) {
 }
 
 function updateDirtyState() {
-  const dirty = state.content !== state.savedContent;
+  const dirty = hasUnsavedChanges();
   $("dirtyBadge").dataset.state = dirty ? "dirty" : "clean";
-  $("dirtyBadge").textContent = messages[state.language][dirty ? "unsaved" : "saved"];
+  const key = dirty ? "unsavedLocal" : (state.hasLocalFile ? "localUnchanged" : "noLocalCopy");
+  $("dirtyBadge").textContent = messages[state.language][key];
 }
 
 function updateFocusModeButton() {
@@ -277,6 +285,17 @@ function renderTransferPreview() {
   );
 }
 
+function invalidateTransferPreview() {
+  if (!state.pullPreviewId && !state.pushPreviewId) return;
+  state.pullPreviewId = null;
+  state.pushPreviewId = null;
+  state.transferPreview = null;
+  $("pullConfirmButton").disabled = true;
+  $("pushConfirmButton").disabled = true;
+  renderSyncOutput(messages[state.language].transferTargetChanged);
+  setLocalizedStatus("transferTargetChanged");
+}
+
 function renderContent() {
   $("editor").value = state.content;
   $("currentName").textContent = state.name;
@@ -284,10 +303,15 @@ function renderContent() {
   if (state.editorMode === "render") handleError(refreshRenderedPreview)();
 }
 
-function setDocument(name, content, saved = true, preserveTransferPreview = false) {
+function setDocument(name, content, {
+  localFile = false, preserveLocalBaseline = false, preserveTransferPreview = false,
+} = {}) {
   state.name = name || "untitled.md";
   state.content = content;
-  if (saved) state.savedContent = content;
+  if (!preserveLocalBaseline) {
+    state.savedContent = content;
+    state.hasLocalFile = localFile;
+  }
   state.catalog = [];
   state.selectedSection = null;
   state.pullPreviewId = null;
@@ -389,7 +413,7 @@ async function applyFocus() {
 async function openLocalFile(file) {
   if (!file || !file.name.toLowerCase().endsWith(".md")) throw new Error("Choose a .md file");
   if (!confirmDiscard()) return false;
-  setDocument(file.name, await file.text(), true);
+  setDocument(file.name, await file.text(), { localFile: true });
   await refreshCatalog();
   return true;
 }
@@ -406,7 +430,7 @@ async function listRemote() {
 async function openRemote() {
   if (!confirmDiscard()) return;
   const result = await api("/api/v1/sync/open", { remote: $("remoteInput").value.trim() });
-  setDocument(result.name, result.content, true);
+  setDocument(result.name, result.content);
   await refreshCatalog();
 }
 
@@ -428,7 +452,9 @@ async function confirmPull() {
   });
   state.pullPreviewId = null;
   $("pullConfirmButton").disabled = true;
-  setDocument(state.name, result.content, true, true);
+  setDocument(state.name, result.content, {
+    preserveLocalBaseline: true, preserveTransferPreview: true,
+  });
   await refreshCatalog();
   renderTransferPreview();
   setLocalizedStatus("pullApplied");
@@ -451,7 +477,6 @@ async function confirmPush() {
   });
   state.pushPreviewId = null;
   $("pushConfirmButton").disabled = true;
-  state.savedContent = state.content;
   updateDirtyState();
   renderTransferPreview();
   setLocalizedStatus("pushComplete");
@@ -468,7 +493,7 @@ async function uploadDocument() {
     payload.head = head;
   }
   const result = await api("/api/v1/sync/upload", payload);
-  setDocument(state.name, result.content, true);
+  setDocument(state.name, result.content, { preserveLocalBaseline: true });
   renderSyncOutput(result.result, "result", true);
   setLocalizedStatus(result.result.status === "PARTIAL" ? "uploadPartial" : "uploadComplete");
 }
@@ -480,6 +505,9 @@ async function loadProvider() {
   $("providerEnabled").checked = provider.enabled;
   $("providerUrl").value = provider.url;
   $("providerToken").value = "";
+  $("providerToken").disabled = false;
+  $("providerClearToken").checked = false;
+  $("providerClearToken").disabled = provider.token_source !== "yaml";
   renderProviderTokenStatus();
 }
 
@@ -487,7 +515,8 @@ async function saveProvider() {
   const name = $("providerSelect").value;
   const tokenInput = $("providerToken");
   const values = { enabled: $("providerEnabled").checked, url: $("providerUrl").value.trim() };
-  if (tokenInput.value) values.token = tokenInput.value;
+  if ($("providerClearToken").checked) values.clear_token = true;
+  else if (tokenInput.value) values.token = tokenInput.value;
   tokenInput.value = "";
   await api("/api/v1/providers", { providers: { [name]: values } }, "PUT");
   setLocalizedStatus("providerSaved", [name]);
@@ -504,6 +533,7 @@ function downloadDocument() {
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  setLocalizedStatus("downloadStarted");
 }
 
 function applyLanguage() {
@@ -561,6 +591,11 @@ $("pushConfirmButton").addEventListener("click", handleError(withWorkbenchLock(c
 $("uploadButton").addEventListener("click", handleError(withWorkbenchLock(uploadDocument)));
 $("providerSelect").addEventListener("change", handleError(withWorkbenchLock(loadProvider)));
 $("providerSaveButton").addEventListener("click", handleError(withWorkbenchLock(saveProvider)));
+$("providerClearToken").addEventListener("change", () => {
+  const clearing = $("providerClearToken").checked;
+  $("providerToken").disabled = clearing;
+  if (clearing) $("providerToken").value = "";
+});
 $("downloadButton").addEventListener("click", downloadDocument);
 $("focusModeButton").addEventListener("click", () => {
   setFocusMode(!document.body.classList.contains("focus-mode"));
@@ -569,13 +604,18 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && document.body.classList.contains("focus-mode")) setFocusMode(false);
 });
 $("languageSelect").addEventListener("change", (event) => { state.language = event.target.value; applyLanguage(); });
-$("collectionInput").addEventListener("input", updatePullRequestFields);
+$("collectionInput").addEventListener("input", () => {
+  updatePullRequestFields();
+  invalidateTransferPreview();
+});
+$("remoteInput").addEventListener("input", invalidateTransferPreview);
 document.querySelectorAll(".editor-mode-switch button").forEach((button) => {
   button.addEventListener("click", handleError(withWorkbenchLock(() => setEditorMode(button.dataset.editorMode))));
 });
 $("remoteObjectSelect").addEventListener("change", (event) => {
   const id = event.target.value;
   if (id) $("remoteInput").value = `${$("collectionInput").value.trim()}/${id}`;
+  invalidateTransferPreview();
 });
 document.querySelectorAll(".mode-button").forEach((button) => button.addEventListener("click", () => {
   document.querySelectorAll(".mode-button").forEach((item) => item.classList.toggle("active", item === button));

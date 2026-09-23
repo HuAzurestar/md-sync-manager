@@ -140,6 +140,7 @@
             <label for="providerToken" data-i18n="token">Token</label>
             <input id="providerToken" type="password" autocomplete="new-password">
             <p id="providerTokenStatus" class="token-status" role="status"></p>
+            <label class="checkbox-label"><input id="providerClearToken" type="checkbox" disabled> <span data-i18n="clearStoredToken">Clear stored token</span></label>
             <button id="providerSaveButton" type="button" data-i18n="saveProvider">Save provider</button>
           </details>
         </section>
@@ -153,7 +154,7 @@
           </div>
           <div class="document-state">
             <span id="statusMessage" role="status" aria-live="polite">Ready</span>
-            <span id="dirtyBadge" class="status-pill" data-state="clean">Saved</span>
+            <span id="dirtyBadge" class="status-pill" data-state="clean">No local copy</span>
             <span id="currentName" class="current-name">untitled.md</span>
           </div>
         </div>

@@ -74,6 +74,8 @@ def focus_apply_text(
     if not replacement_lines or replacement_lines[0] != selector:
         raise ValueError("replacement must retain the exact selected heading")
     lines = text.splitlines(keepends=True)
+    if section.end_line < len(lines) and not replacement.endswith(("\n", "\r")):
+        raise ValueError("replacement must end with a newline before the next section")
     updated = (
         "".join(lines[: section.start_line - 1])
         + replacement

@@ -82,6 +82,17 @@ class FocusTests(unittest.TestCase):
                 replacement="## Changed\nnew\n",
             )
 
+    def test_nonterminal_replacement_requires_a_final_newline(self):
+        source = "# A\nold\n# B\nkeep\n"
+        with self.assertRaisesRegex(ValueError, "end with a newline"):
+            focus_apply_text(
+                source,
+                selector="# A",
+                expected_source="# A\nold\n",
+                replacement="# A\nnew",
+            )
+        self.assertEqual(focus_read_text(source, ["# B"])[0].source, "# B\nkeep\n")
+
     def test_conflict_performs_zero_file_writes_and_success_is_atomic(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "focus.md"

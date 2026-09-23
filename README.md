@@ -21,7 +21,7 @@ The Workbench keeps one document open at a time:
 3. In **Sync**, use **Remote list** to browse and open objects. Use **Transfer** for the grouped Pull, Push, Download, and Upload/New operations.
 4. Use the lower-left mode switch for **Difference**, **Markdown source**, or the secondary read-only **Render** view. Document and save state stays at the upper right of the work area.
 5. Preview the diff before confirming either a pull or a push. Difference mode uses the vendored `diff2html` browser bundle to show Git-style Markdown source changes with old/new line numbers, red removals, green additions, and added/deleted line counts.
-6. Download saves a browser-edited copy, while Upload/New creates a remote object.
+6. Download starts a browser download of the edited copy, while Upload/New creates a remote object. Pull, push, and upload do not write back to a file previously opened from disk. The badge keeps changes marked as not saved locally; download an updated copy and reopen it to establish a new local baseline.
 
 Render mode uses `markdown-it-py` in CommonMark mode with raw HTML disabled; md-sync does not implement its own Markdown parser. Difference mode uses the fixed, locally served `diff2html@3.4.56` distribution so Docker remains usable offline. Mermaid fences remain ordinary code blocks. Pull and push are always preview-plus-confirm operations. Focus apply rejects stale source and leaves the document unchanged.
 

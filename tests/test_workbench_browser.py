@@ -44,6 +44,7 @@ class WorkbenchBrowserTests(unittest.TestCase):
                 "SMMD_CONFIG": str(Path(cls._temporary.name) / "sync.yaml"),
             }
         )
+        environment.pop("YOUTRACK_TOKEN", None)
         cls._server = subprocess.Popen(
             [sys.executable, "-m", "src.controller.server"],
             cwd=ROOT,
@@ -126,6 +127,81 @@ class WorkbenchBrowserTests(unittest.TestCase):
 
         self.assertEqual(download.suggested_filename, "untitled.md")
         self.assertEqual(Path(download.path()).read_bytes(), content.encode("utf-8"))
+        self.assertEqual(self.page.locator("#dirtyBadge").get_attribute("data-state"), "dirty")
+        self.assertEqual(self.page.locator("#statusMessage").inner_text(), "Copy download started")
+
+    def test_remote_sync_does_not_claim_local_file_was_saved(self):
+        original = "---\ntitle: Demo\nremote: github/issues/o/r/9\n---\n\n# Old\n"
+        self.page.locator("#fileInput").set_input_files(
+            {"name": "demo.md", "mimeType": "text/markdown", "buffer": original.encode()}
+        )
+        self.assertEqual(self.page.locator("#dirtyBadge").inner_text(), "Local file unchanged")
+        self.page.locator("#editor").fill(original + "local edit\n")
+
+        def fulfill(route):
+            if route.request.url.endswith("/sync/push/preview"):
+                data = {
+                    "preview_id": "push-preview",
+                    "direction": "push",
+                    "diff": "--- a/demo.md\n+++ b/demo.md\n@@ -1 +1 @@\n-old\n+new\n",
+                }
+            elif route.request.url.endswith("/sync/push/confirm"):
+                data = {"result": {"status": "SUCCESS"}}
+            elif route.request.url.endswith("/sync/pull/preview"):
+                data = {
+                    "preview_id": "pull-preview",
+                    "direction": "pull",
+                    "diff": "--- a/demo.md\n+++ b/demo.md\n@@ -1 +1 @@\n-old\n+new\n",
+                }
+            else:
+                data = {"content": original + "remote edit\n"}
+            route.fulfill(json={"status": "success", "data": data, "error": None})
+
+        self.page.route("**/api/v1/sync/push/**", fulfill)
+        self.page.route("**/api/v1/sync/pull/**", fulfill)
+        self.page.locator('[data-panel="syncPanel"]').click()
+        self.page.locator("#pushPreviewButton").click()
+        self.page.locator("#pushConfirmButton").click()
+        self.page.wait_for_function(
+            "document.querySelector('#statusMessage').textContent === 'Push complete'"
+        )
+        self.assertEqual(self.page.locator("#dirtyBadge").get_attribute("data-state"), "dirty")
+        self.assertTrue(self.page.evaluate("hasUnsavedChanges()"))
+
+        self.page.locator("#pullPreviewButton").click()
+        self.page.locator("#pullConfirmButton").click()
+        self.page.wait_for_function(
+            "document.querySelector('#statusMessage').textContent === 'Pull applied'"
+        )
+        self.assertEqual(self.page.locator("#dirtyBadge").get_attribute("data-state"), "dirty")
+        self.page.once("dialog", lambda dialog: dialog.dismiss())
+        self.page.locator("#fileInput").set_input_files(
+            {"name": "other.md", "mimeType": "text/markdown", "buffer": b"# Other\n"}
+        )
+        self.assertEqual(self.page.locator("#currentName").inner_text(), "demo.md")
+
+    def test_upload_binding_remains_unsaved_in_original_local_file(self):
+        self.page.locator("#fileInput").set_input_files(
+            {"name": "new.md", "mimeType": "text/markdown", "buffer": b"# New\n"}
+        )
+        bound = "---\ntitle: New\nremote: github/issues/o/r/42\n---\n\n# New\n"
+        self.page.route(
+            "**/api/v1/sync/upload",
+            lambda route: route.fulfill(
+                json={
+                    "status": "success",
+                    "data": {"content": bound, "result": {"status": "SUCCESS"}},
+                    "error": None,
+                }
+            ),
+        )
+        self.page.locator('[data-panel="syncPanel"]').click()
+        self.page.locator("#uploadButton").click()
+        self.page.wait_for_function(
+            "document.querySelector('#statusMessage').textContent === 'Upload complete'"
+        )
+        self.assertEqual(self.page.locator("#dirtyBadge").get_attribute("data-state"), "dirty")
+        self.assertTrue(self.page.evaluate("hasUnsavedChanges()"))
 
     def test_open_file_keyboard_access_and_chinese_accessible_copy(self):
         self.page.locator("body").click(position={"x": 1, "y": 1})
@@ -253,6 +329,15 @@ class WorkbenchBrowserTests(unittest.TestCase):
             "fetch('/api/v1/providers').then(response => response.text())"
         )
         self.assertNotIn("browser-only-secret", response_text)
+        clear_token = self.page.locator("#providerClearToken")
+        self.assertFalse(clear_token.is_disabled())
+        clear_token.check()
+        self.assertTrue(self.page.locator("#providerToken").is_disabled())
+        self.page.locator("#providerSaveButton").click()
+        self.page.wait_for_function(
+            "document.querySelector('#providerTokenStatus').dataset.state === 'missing'"
+        )
+        self.assertTrue(clear_token.is_disabled())
 
     def test_editor_is_locked_while_push_confirmation_is_in_flight(self):
         self.page.locator('[data-panel="syncPanel"]').click()
@@ -364,6 +449,29 @@ class WorkbenchBrowserTests(unittest.TestCase):
         self.assertTrue(self.page.locator("#pushConfirmButton").is_disabled())
         self.assertIn("pull change", self.page.locator("#syncOutput").inner_text())
         self.assertIn("Pull", self.page.locator("#diffFiles").inner_text())
+
+    def test_changing_pull_target_invalidates_confirmation(self):
+        self.page.route(
+            "**/api/v1/sync/pull/preview",
+            lambda route: route.fulfill(
+                json={
+                    "status": "success",
+                    "data": {
+                        "preview_id": "old-target",
+                        "direction": "pull",
+                        "diff": "--- a/doc.md\n+++ b/doc.md\n@@ -1 +1 @@\n-old\n+new\n",
+                    },
+                    "error": None,
+                }
+            ),
+        )
+        self.page.locator('[data-panel="syncPanel"]').click()
+        self.page.locator("#remoteInput").fill("github/issues/o/r/1")
+        self.page.locator("#pullPreviewButton").click()
+        self.page.wait_for_function("!document.querySelector('#pullConfirmButton').disabled")
+        self.page.locator("#remoteInput").fill("github/issues/o/r/2")
+        self.assertTrue(self.page.locator("#pullConfirmButton").is_disabled())
+        self.assertIn("preview again", self.page.locator("#statusMessage").inner_text())
 
     def test_remote_list_open_pull_push_and_upload_controls(self):
         def fulfill(route):

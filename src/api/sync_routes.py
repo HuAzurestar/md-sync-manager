@@ -75,11 +75,6 @@ async def confirm_pull(payload: PullConfirmRequest, request: Request):
     )
 
 
-@router.post("/sync/push")
-async def push(payload: DocumentRequest, request: Request):
-    return success(_sync(request).push(name=payload.name, content=payload.content))
-
-
 @router.post("/sync/push/preview")
 async def preview_push(payload: DocumentRequest, request: Request):
     return success(_sync(request).preview_push(name=payload.name, content=payload.content))

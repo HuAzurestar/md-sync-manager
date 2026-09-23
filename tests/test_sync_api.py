@@ -115,10 +115,6 @@ class SyncApiTests(unittest.TestCase):
     def test_push_upload_and_partial_upload_are_explicit(self):
         with tempfile.TemporaryDirectory() as directory:
             client, provider = self.make_client(directory)
-            pushed = client.post(
-                "/api/v1/sync/push",
-                json={"name": "doc.md", "content": bound_content()},
-            )
             uploaded = client.post(
                 "/api/v1/sync/upload",
                 json={
@@ -141,13 +137,22 @@ class SyncApiTests(unittest.TestCase):
                 },
             )
 
-        self.assertEqual(pushed.json()["data"]["result"]["direction"], "push")
         self.assertEqual(uploaded.json()["data"]["result"]["status"], "SUCCESS")
         self.assertEqual(uploaded.json()["data"]["document"]["remote"], "github/issues/o/r/42")
         self.assertEqual(partial.status_code, 200)
         self.assertEqual(partial.json()["data"]["result"]["status"], "PARTIAL")
         self.assertEqual(partial.json()["data"]["document"]["remote"], "github/issues/o/r/42")
-        self.assertEqual([call[0] for call in provider.calls], ["push", "upload"])
+        self.assertEqual([call[0] for call in provider.calls], ["upload"])
+
+    def test_push_cannot_skip_preview_and_confirmation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            client, provider = self.make_client(directory)
+            direct = client.post(
+                "/api/v1/sync/push",
+                json={"name": "doc.md", "content": bound_content()},
+            )
+        self.assertEqual(direct.status_code, 404)
+        self.assertEqual(provider.calls, [])
 
     def test_push_preview_requires_unchanged_local_and_remote_content(self):
         original = bound_content("# Local\nPush this body\n")
