@@ -119,6 +119,21 @@ class RemotePathTests(unittest.TestCase):
 
 
 class DocumentTests(unittest.TestCase):
+    def test_front_matter_delimiters_must_occupy_their_own_lines(self):
+        source = (
+            "---\r\ntitle: A---B\r\nremote: github/issues/o/r/2\r\n"
+            "---\r\n\r\nBody --- stays in the body\r\n"
+        )
+        document = parse_text(source)
+
+        self.assertEqual(document.title, "A---B")
+        self.assertEqual(str(document.remote), "github/issues/o/r/2")
+        self.assertEqual(document.body, "Body --- stays in the body\r\n")
+        with self.assertRaisesRegex(ValueError, "not closed"):
+            parse_text("---\ntitle: A---B\n")
+        with self.assertRaisesRegex(ValueError, "requires YAML front matter"):
+            parse_text("--- trailing\ntitle: A\n---\n")
+
     def test_minimal_scalar_remote_round_trip(self):
         source = "---\ntitle: Example\nparent: github/issues/o/r/1\nremote: github/issues/o/r/2\n---\n\nBody\n"
         document = parse_text(source)

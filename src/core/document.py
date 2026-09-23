@@ -26,12 +26,17 @@ class MarkdownDocument:
 
 
 def parse_text(text: str, path: Path = Path("<memory>")) -> MarkdownDocument:
-    if not text.startswith("---"):
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].rstrip("\r\n") != "---":
         raise ValueError("Markdown requires YAML front matter")
-    parts = text.split("---", 2)
-    if len(parts) != 3:
+    closing = next(
+        (index for index, line in enumerate(lines[1:], start=1)
+         if line.rstrip("\r\n") == "---"),
+        None,
+    )
+    if closing is None:
         raise ValueError("YAML front matter is not closed")
-    metadata = yaml.safe_load(parts[1]) or {}
+    metadata = yaml.safe_load("".join(lines[1:closing])) or {}
     if not isinstance(metadata, dict):
         raise ValueError("YAML front matter must be a mapping")
     unknown = set(metadata) - {"title", "parent", "remote"}
@@ -53,7 +58,7 @@ def parse_text(text: str, path: Path = Path("<memory>")) -> MarkdownDocument:
         raise ValueError("remote must be a non-empty remote path string")
 
     remote = RemotePath.parse(remote_value, require="object") if remote_value else None
-    body = parts[2].lstrip("\r\n")
+    body = "".join(lines[closing + 1:]).lstrip("\r\n")
     return MarkdownDocument(path, metadata, body, remote)
 
 

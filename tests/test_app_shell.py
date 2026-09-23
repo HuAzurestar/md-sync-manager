@@ -39,7 +39,7 @@ class AppShellTests(unittest.TestCase):
 
         @application.get("/explode")
         async def explode():
-            raise RuntimeError("provider unavailable")
+            raise RuntimeError("provider unavailable: private-token")
 
         response = TestClient(application, raise_server_exceptions=False).get("/explode")
 
@@ -49,9 +49,43 @@ class AppShellTests(unittest.TestCase):
             {
                 "status": "error",
                 "data": None,
-                "error": {"message": "provider unavailable"},
+                "error": {"message": "Operation failed; check provider settings or retry."},
             },
         )
+        self.assertNotIn("private-token", response.text)
+
+    def test_validation_errors_do_not_echo_submitted_content_or_token(self):
+        client = TestClient(create_app(), raise_server_exceptions=False)
+        content = client.post(
+            "/api/v1/document/inspect",
+            json={"content": "private-markdown-body"},
+        )
+        token = client.put(
+            "/api/v1/providers",
+            json={"providers": "private-provider-token"},
+        )
+
+        self.assertEqual(content.status_code, 500)
+        self.assertEqual(token.status_code, 500)
+        self.assertNotIn("private-markdown-body", content.text)
+        self.assertNotIn("private-provider-token", token.text)
+        self.assertIn("required fields", content.json()["error"]["message"])
+
+    def test_inspect_preserves_inline_dashes_in_front_matter(self):
+        response = TestClient(create_app()).post(
+            "/api/v1/document/inspect",
+            json={
+                "name": "bound.md",
+                "content": (
+                    "---\ntitle: A---B\nremote: github/issues/o/r/2\n"
+                    "---\n\nBody\n"
+                ),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["title"], "A---B")
+        self.assertEqual(response.json()["data"]["remote"], "github/issues/o/r/2")
 
     def test_workbench_shell_and_server_defaults_are_local_only(self):
         response = TestClient(create_app()).get("/")
