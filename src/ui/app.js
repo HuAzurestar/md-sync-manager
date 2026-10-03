@@ -37,6 +37,9 @@ const messages = {
     differenceMode: "Difference", sourceMode: "Markdown source", renderMode: "Render",
     differenceHint: "Inspect the latest pull or push difference.", sourceHint: "Edit the Markdown text directly.", renderHint: "Secondary read-only view rendered with CommonMark.", rendering: "Rendering…",
     discardChanges: "Discard unsaved changes and open another document?",
+    discardFocusDraft: "Discard the section draft that has not been written back?",
+    unappliedDraft: "Section draft not applied",
+    applyDraftFirst: "Write the section draft back or explicitly discard it before exporting the document.",
     localUnchanged: "Local file unchanged", unsavedLocal: "Not saved locally", noLocalCopy: "No local copy",
     downloadStarted: "Copy download started", transferTargetChanged: "Transfer target changed; preview again.",
     clearStoredToken: "Clear stored token",
@@ -59,6 +62,9 @@ const messages = {
     pullRequestBranchesRequired: "Base and head branches are required for Pull Request uploads.",
   },
   zh: {
+    discardFocusDraft: "放弃尚未写回文档的章节草稿？",
+    unappliedDraft: "章节草稿尚未写回",
+    applyDraftFirst: "请先写回章节草稿或明确放弃草稿，再导出文档。",
     discardChanges: "\u653e\u5f03\u672a\u4fdd\u5b58\u7684\u66f4\u6539\u5e76\u6253\u5f00\u53e6\u4e00\u4e2a\u6587\u6863\uff1f",
     title: "Markdown 聚焦工作台", openFile: "打开文件", download: "下载副本",
     immersiveMode: "沉浸编辑", exitImmersive: "退出沉浸", documentMode: "文档 / 章节", syncMode: "同步",
@@ -133,7 +139,7 @@ function setLocalizedStatus(key, args = [], error = false) {
 function updateDirtyState() {
   const dirty = hasUnsavedChanges();
   $("dirtyBadge").dataset.state = dirty ? "dirty" : "clean";
-  const key = dirty ? "unsavedLocal" : (state.hasLocalFile ? "localUnchanged" : "noLocalCopy");
+  const key = hasFocusDraft() ? "unappliedDraft" : (dirty ? "unsavedLocal" : (state.hasLocalFile ? "localUnchanged" : "noLocalCopy"));
   $("dirtyBadge").textContent = messages[state.language][key];
 }
 
@@ -167,7 +173,24 @@ function setFocusMode(active) {
 }
 
 function hasUnsavedChanges() {
-  return state.content !== state.savedContent;
+  return state.content !== state.savedContent || hasFocusDraft();
+}
+
+function hasFocusDraft() {
+  if (!state.selectedSection) return false;
+  // Textareas normalize line endings. A pristine CRLF section is not a draft.
+  return restoreLineEndings($("focusEditor").value, state.selectedSection.source)
+    !== state.selectedSection.source;
+}
+
+function confirmFocusDiscard() {
+  return !hasFocusDraft() || window.confirm(messages[state.language].discardFocusDraft);
+}
+
+function requireAppliedDraft() {
+  if (!hasFocusDraft()) return true;
+  setLocalizedStatus("applyDraftFirst", [], true);
+  return false;
 }
 
 function restoreLineEndings(value, previous) {
@@ -366,6 +389,7 @@ function updateFocusSelection(resetRead = false) {
   $("focusWriteHint").textContent = writable
     ? copy.focusWriteReady
     : (count > 1 ? copy.focusWriteMultiple : copy.focusWriteHint);
+  updateDirtyState();
 }
 
 function renderCatalog(entries) {
@@ -378,7 +402,13 @@ function renderCatalog(entries) {
     checkbox.type = "checkbox";
     checkbox.className = "catalog-select";
     checkbox.value = entry.heading;
-    checkbox.addEventListener("change", () => updateFocusSelection(true));
+    checkbox.addEventListener("change", () => {
+      if (!confirmFocusDiscard()) {
+        checkbox.checked = !checkbox.checked;
+        return;
+      }
+      updateFocusSelection(true);
+    });
     const text = document.createElement("span");
     text.textContent = `${index + 1}. ${entry.heading} · L${entry.line}`;
     label.append(checkbox, text);
@@ -395,6 +425,7 @@ async function refreshCatalog() {
 }
 
 async function readFocus() {
+  if (!confirmFocusDiscard()) return;
   const selectors = selectedHeadings();
   const result = await api("/api/v1/document/focus/read", { name: state.name, content: state.content, selectors });
   const combined = result.sections.map((item) => item.source).join("\n");
@@ -420,6 +451,7 @@ async function applyFocus() {
   });
   state.content = result.content;
   state.selectedSection = result.section;
+  $("focusEditor").value = result.section.source;
   renderContent();
   await refreshCatalog();
   setLocalizedStatus("sectionApplied");
@@ -462,6 +494,7 @@ async function previewPull() {
 }
 
 async function confirmPull() {
+  if (!confirmFocusDiscard()) return;
   const result = await api("/api/v1/sync/pull/confirm", {
     name: state.name, content: state.content, preview_id: state.pullPreviewId,
   });
@@ -476,6 +509,7 @@ async function confirmPull() {
 }
 
 async function previewPush() {
+  if (!requireAppliedDraft()) return;
   const result = await api("/api/v1/sync/push/preview", { name: state.name, content: state.content });
   state.pullPreviewId = null;
   $("pullConfirmButton").disabled = true;
@@ -487,6 +521,7 @@ async function previewPush() {
 }
 
 async function confirmPush() {
+  if (!requireAppliedDraft()) return;
   await api("/api/v1/sync/push/confirm", {
     name: state.name, content: state.content, preview_id: state.pushPreviewId,
   });
@@ -498,6 +533,7 @@ async function confirmPush() {
 }
 
 async function uploadDocument() {
+  if (!requireAppliedDraft()) return;
   const target = $("collectionInput").value.trim();
   const payload = { name: state.name, content: state.content, target };
   if (isPullRequestCollection(target)) {
@@ -539,6 +575,7 @@ async function saveProvider() {
 }
 
 function downloadDocument() {
+  if (!requireAppliedDraft()) return;
   const blob = new Blob([state.content], { type: "text/markdown;charset=utf-8" });
   const anchor = document.createElement("a");
   const objectUrl = URL.createObjectURL(blob);
@@ -577,6 +614,10 @@ function handleError(action) {
 }
 
 $("editor").addEventListener("input", () => {
+  if (!confirmFocusDiscard()) {
+    $("editor").value = state.content;
+    return;
+  }
   state.content = restoreLineEndings($("editor").value, state.content);
   state.renderedContent = null;
   updateFocusSelection(true);
@@ -594,7 +635,10 @@ $("fileInput").addEventListener("change", handleError(withWorkbenchLock(async (e
   await openLocalFile(event.target.files[0]);
   event.target.value = "";
 })));
-$("catalogButton").addEventListener("click", handleError(withWorkbenchLock(refreshCatalog)));
+$("focusEditor").addEventListener("input", updateDirtyState);
+$("catalogButton").addEventListener("click", handleError(withWorkbenchLock(async () => {
+  if (confirmFocusDiscard()) await refreshCatalog();
+})));
 $("focusReadButton").addEventListener("click", handleError(withWorkbenchLock(readFocus)));
 $("focusApplyButton").addEventListener("click", handleError(withWorkbenchLock(applyFocus)));
 $("remoteListButton").addEventListener("click", handleError(withWorkbenchLock(listRemote)));
