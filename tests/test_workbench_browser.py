@@ -130,6 +130,149 @@ class WorkbenchBrowserTests(unittest.TestCase):
         self.assertEqual(self.page.locator("#dirtyBadge").get_attribute("data-state"), "dirty")
         self.assertEqual(self.page.locator("#statusMessage").inner_text(), "Copy download started")
 
+    def section_draft(self):
+        original = "# Root\r\nintro\r\n## One\r\nold\r\n## Two\r\nkeep\r\n"
+        self.page.locator("#fileInput").set_input_files(
+            {"name": "draft.md", "mimeType": "text/markdown", "buffer": original.encode()})
+        self.page.locator(".catalog-select").nth(1).check()
+        self.page.locator("#focusReadButton").click()
+        self.page.wait_for_function("!document.querySelector('#focusApplyButton').disabled")
+        self.page.locator("#focusEditor").fill("## One\ndraft\n")
+        return original
+
+    def test_section_draft_local_replacement_cancel_then_discard(self):
+        original = self.section_draft()
+        self.assertEqual(self.page.locator("#dirtyBadge").get_attribute("data-state"), "dirty")
+        self.assertIn("not applied", self.page.locator("#dirtyBadge").inner_text())
+        replacement = {"name": "other.md", "mimeType": "text/markdown", "buffer": b"# Other\n"}
+        dialogs = []
+        def cancel(dialog):
+            dialogs.append(dialog.message)
+            dialog.dismiss()
+        self.page.on("dialog", cancel)
+        self.page.locator("#fileInput").set_input_files(replacement)
+        self.assertEqual(len(dialogs), 1)
+        self.assertEqual(self.page.evaluate("state.content"), original)
+        self.assertEqual(self.page.locator("#focusEditor").input_value(), "## One\ndraft\n")
+        self.page.remove_listener("dialog", cancel)
+        self.page.once("dialog", lambda dialog: dialog.accept())
+        self.page.locator("#fileInput").set_input_files(replacement)
+        self.page.wait_for_function("state.name === 'other.md'")
+        self.assertEqual(self.page.locator("#focusEditor").input_value(), "")
+        self.assertFalse(self.page.evaluate("hasUnsavedChanges()"))
+
+    def test_section_draft_focus_resets_can_be_cancelled(self):
+        original = self.section_draft()
+        dialogs = []
+        def cancel(dialog):
+            dialogs.append(dialog.message)
+            dialog.dismiss()
+        self.page.on("dialog", cancel)
+        for action in (lambda: self.page.locator("#focusReadButton").click(),
+                       lambda: self.page.locator("#catalogButton").click(),
+                       lambda: self.page.locator(".catalog-select").nth(2).click(),
+                       lambda: self.page.locator("#editor").press("x")):
+            before = len(dialogs)
+            action()
+            self.assertEqual(len(dialogs), before + 1)
+            self.assertEqual(self.page.locator("#focusEditor").input_value(), "## One\ndraft\n")
+            self.assertEqual(self.page.evaluate("state.content"), original)
+            self.assertEqual(self.page.evaluate("selectedHeadings()"), ["## One"])
+            self.assertFalse(self.page.locator("#focusApplyButton").is_disabled())
+
+    def test_section_draft_apply_revert_and_unload(self):
+        original = self.section_draft()
+        self.assertTrue(self.page.evaluate("() => { const e = new Event('beforeunload', {cancelable:true}); window.dispatchEvent(e); return e.defaultPrevented; }"))
+        self.page.locator("#focusEditor").fill("## One\nold\n")
+        self.assertFalse(self.page.evaluate("hasUnsavedChanges()"))
+        self.assertFalse(self.page.evaluate("() => { const e = new Event('beforeunload', {cancelable:true}); window.dispatchEvent(e); return e.defaultPrevented; }"))
+        self.page.locator("#focusEditor").fill("## One\ndraft\n")
+        self.page.locator("#focusApplyButton").click()
+        self.page.wait_for_function("document.querySelector('#statusMessage').textContent === 'Section applied'")
+        self.assertEqual(self.page.evaluate("state.content"), original.replace("old", "draft"))
+        self.assertFalse(self.page.evaluate("hasFocusDraft()"))
+        self.assertTrue(self.page.evaluate("hasUnsavedChanges()"))
+
+    def test_section_draft_export_actions_do_not_silently_omit_it(self):
+        self.section_draft()
+        requests = []
+        self.page.on("request", lambda request: requests.append(request.url))
+        self.page.locator('[data-panel="syncPanel"]').click()
+        for selector in ("#downloadButton", "#pushPreviewButton", "#uploadButton"):
+            self.page.locator(selector).click()
+            self.assertEqual(self.page.locator("#statusMessage").get_attribute("data-error"), "true")
+            self.assertIn("section draft", self.page.locator("#statusMessage").inner_text())
+            self.assertEqual(self.page.locator("#focusEditor").input_value(), "## One\ndraft\n")
+        self.assertFalse(any("/sync/" in url for url in requests))
+
+    def test_section_draft_explicit_focus_discard_and_chinese_badge(self):
+        for selector in ("#focusReadButton", "#catalogButton", ".catalog-select", "#editor"):
+            with self.subTest(action=selector):
+                self.section_draft()
+                self.page.locator("#languageSelect").select_option("zh")
+                self.assertEqual(self.page.locator("#dirtyBadge").inner_text(), "章节草稿尚未写回")
+                dialogs = []
+                def accept(dialog):
+                    dialogs.append(dialog.message)
+                    dialog.accept()
+                self.page.once("dialog", accept)
+                if selector == ".catalog-select":
+                    self.page.locator(selector).nth(2).click()
+                elif selector == "#editor":
+                    self.page.locator(selector).fill("# Root\nintro\n## One\nold\n## Two\nkeep\n")
+                else:
+                    self.page.locator(selector).click()
+                self.page.wait_for_function("!state.locked")
+                self.assertEqual(dialogs, ["放弃尚未写回文档的章节草稿？"])
+                self.assertFalse(self.page.evaluate("hasFocusDraft()"))
+                self.assertFalse(self.page.evaluate("hasUnsavedChanges()"))
+
+    def test_section_draft_remote_replacement_and_pull_confirmation(self):
+        original = self.section_draft()
+        calls = []
+        def fulfill(route):
+            calls.append(route.request.url)
+            if route.request.url.endswith("/preview"):
+                data = {"preview_id": "draft-pull", "direction": "pull", "diff": ""}
+            else:
+                data = {"name": "remote.md", "content": "# Remote\n"}
+            route.fulfill(json={"status": "success", "data": data, "error": None})
+        self.page.route("**/api/v1/sync/**", fulfill)
+        self.page.locator('[data-panel="syncPanel"]').click()
+        self.page.once("dialog", lambda dialog: dialog.dismiss())
+        self.page.locator("#remoteOpenButton").click()
+        self.assertEqual(calls, [])
+        self.page.locator("#pullPreviewButton").click()
+        self.page.wait_for_function("!document.querySelector('#pullConfirmButton').disabled")
+        self.page.once("dialog", lambda dialog: dialog.dismiss())
+        self.page.locator("#pullConfirmButton").click()
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(self.page.evaluate("state.content"), original)
+        self.assertEqual(self.page.locator("#focusEditor").input_value(), "## One\ndraft\n")
+        self.assertFalse(self.page.locator("#pullConfirmButton").is_disabled())
+        self.page.once("dialog", lambda dialog: dialog.accept())
+        self.page.locator("#pullConfirmButton").click()
+        self.page.wait_for_function("state.content === '# Remote\\n'")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(self.page.locator("#focusEditor").input_value(), "")
+        self.assertTrue(self.page.evaluate("hasUnsavedChanges()"))
+
+    def test_section_draft_survives_failed_apply_and_failed_replacement(self):
+        original = self.section_draft()
+        def fail(route):
+            route.fulfill(status=409, json={"status": "error", "error": {"message": "fixture conflict"}})
+        self.page.route("**/api/v1/document/focus/apply", fail)
+        self.page.locator("#focusApplyButton").click()
+        self.page.wait_for_function("!state.locked")
+        self.assertEqual(self.page.locator("#statusMessage").inner_text(), "fixture conflict")
+        self.page.route("**/api/v1/document/focus/read", fail)
+        self.page.once("dialog", lambda dialog: dialog.accept())
+        self.page.locator("#focusReadButton").click()
+        self.page.wait_for_function("!state.locked")
+        self.assertEqual(self.page.locator("#focusEditor").input_value(), "## One\ndraft\n")
+        self.assertEqual(self.page.evaluate("state.content"), original)
+        self.assertTrue(self.page.evaluate("hasFocusDraft()"))
+
     def test_source_edit_preserves_existing_line_endings(self):
         original = "# Root\r\nintro\n## One\r\nold\r\n"
         self.page.locator("#fileInput").set_input_files(
